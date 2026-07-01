@@ -108,6 +108,12 @@ npm run build
 
 Current test coverage includes pipe framing, Textractor `SentenceInfo` parsing/filtering, VAD trigger logic, asset storage, and history pagination.
 
+## License
+
+This project is licensed under GPL-3.0-only. See `LICENSE`.
+
+Binary distributions may include FFmpeg as a separate GPLv3 executable for MP3 preparation. See `THIRD_PARTY_NOTICES.md`.
+
 ## Current Limitations
 
 This repository implements the architecture and a functional text/history/SSE/Vue UI/mining path. The advanced Windows media backends are intentionally isolated behind traits, but not all production capture paths are complete yet:
