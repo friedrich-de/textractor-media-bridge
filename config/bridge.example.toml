@@ -1,0 +1,51 @@
+[server]
+bind = "127.0.0.1:7788"
+lan_mode = false
+session_token_required = true
+
+[pipe]
+name = "auto"
+
+[screenshot]
+# auto tries Windows Graphics Capture first and falls back to Win32 GDI when needed.
+backend = "auto"
+format = "png"
+
+[audio]
+backend = "auto"
+vad = "webrtc"
+format = "wav"
+trailing_silence_ms = 1600
+no_speech_timeout_ms = 5000
+max_duration_ms = 120000
+
+[assets]
+ttl_minutes = 120
+max_storage_mb = 1024
+
+[mining]
+screenshot_format = "jpeg"
+screenshot_quality = 85
+audio_format = "mp3"
+audio_bitrate_kbps = 96
+# ffmpeg_path = "C:\\path\\to\\ffmpeg.exe"
+
+[anki]
+endpoint = "http://127.0.0.1:8765"
+mode = "update_latest"
+max_latest_card_age_minutes = 5
+overwrite_sentence_field = false
+fallback_create_note = false
+range_sentence_separator = " "
+range_screenshot_pick = "last"
+deck_name = "Mining"
+model_name = "Basic"
+sentence_field = "Sentence"
+notes_field = "Notes"
+screenshot_field = "Image"
+audio_field = "Audio"
+source_field = "Source"
+tags = ["textractor", "mined"]
+
+[storage]
+# data_dir = "C:\\Users\\you\\AppData\\Local\\TextractorMediaBridge"

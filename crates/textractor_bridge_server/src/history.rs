@@ -1,0 +1,293 @@
+use bridge_protocol::{LineHistoryPage, LineId, LineRecord, LineSeq};
+use parking_lot::{Mutex, RwLock};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::BTreeMap,
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader, Write},
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+#[derive(Debug, thiserror::Error)]
+pub enum HistoryError {
+    #[error("i/o error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+enum HistoryOp {
+    Upsert { line: LineRecord },
+    Purge { line_id: LineId },
+}
+
+pub struct HistoryStore {
+    path: PathBuf,
+    lines: RwLock<BTreeMap<LineSeq, LineRecord>>,
+    next_seq: AtomicU64,
+    append_lock: Mutex<()>,
+}
+
+impl HistoryStore {
+    pub fn load(path: PathBuf) -> Result<Self, HistoryError> {
+        let mut lines = BTreeMap::new();
+        if path.exists() {
+            let reader = BufReader::new(File::open(&path)?);
+            for line in reader.lines() {
+                let line = line?;
+                if line.trim().is_empty() {
+                    continue;
+                }
+                match serde_json::from_str::<HistoryOp>(&line)? {
+                    HistoryOp::Upsert { line } => {
+                        lines.insert(line.line_seq, line);
+                    }
+                    HistoryOp::Purge { line_id } => {
+                        lines.retain(|_, line| line.line_id != line_id);
+                    }
+                }
+            }
+        }
+
+        let next = lines.keys().next_back().copied().unwrap_or(0) + 1;
+        Ok(Self {
+            path,
+            lines: RwLock::new(lines),
+            next_seq: AtomicU64::new(next.max(1)),
+            append_lock: Mutex::new(()),
+        })
+    }
+
+    pub fn next_line_seq(&self) -> LineSeq {
+        self.next_seq.fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub fn upsert(&self, line: LineRecord) -> Result<(), HistoryError> {
+        self.lines.write().insert(line.line_seq, line.clone());
+        self.append(&HistoryOp::Upsert { line })
+    }
+
+    pub fn update<F>(&self, line_id: LineId, update: F) -> Result<Option<LineRecord>, HistoryError>
+    where
+        F: FnOnce(&mut LineRecord),
+    {
+        let updated = {
+            let mut lines = self.lines.write();
+            let Some(line) = lines.values_mut().find(|line| line.line_id == line_id) else {
+                return Ok(None);
+            };
+            update(line);
+            line.clone()
+        };
+        self.append(&HistoryOp::Upsert {
+            line: updated.clone(),
+        })?;
+        Ok(Some(updated))
+    }
+
+    pub fn purge_line(&self, line_id: LineId) -> Result<bool, HistoryError> {
+        let removed = {
+            let mut lines = self.lines.write();
+            let before = lines.len();
+            lines.retain(|_, line| line.line_id != line_id);
+            before != lines.len()
+        };
+        if removed {
+            self.append(&HistoryOp::Purge { line_id })?;
+        }
+        Ok(removed)
+    }
+
+    pub fn get_line(&self, line_id: LineId) -> Option<LineRecord> {
+        self.lines
+            .read()
+            .values()
+            .find(|line| line.line_id == line_id)
+            .cloned()
+    }
+
+    pub fn get_lines_by_ids(&self, line_ids: &[LineId]) -> Vec<LineRecord> {
+        let lines = self.lines.read();
+        line_ids
+            .iter()
+            .filter_map(|line_id| {
+                lines
+                    .values()
+                    .find(|line| line.line_id == *line_id)
+                    .cloned()
+            })
+            .collect()
+    }
+
+    pub fn all_lines(&self) -> Vec<LineRecord> {
+        self.lines.read().values().cloned().collect()
+    }
+
+    pub fn newest_seq(&self) -> Option<LineSeq> {
+        self.lines.read().keys().next_back().copied()
+    }
+
+    pub fn page(
+        &self,
+        limit: usize,
+        before_seq: Option<LineSeq>,
+        after_seq: Option<LineSeq>,
+        source_key: Option<&str>,
+    ) -> LineHistoryPage {
+        let limit = limit.clamp(1, 500);
+        let lines = self.lines.read();
+
+        let source_matches = |line: &&LineRecord| {
+            source_key
+                .map(|source| line.source_key() == source)
+                .unwrap_or(true)
+        };
+
+        let mut selected: Vec<LineRecord> = if let Some(after_seq) = after_seq {
+            lines
+                .range((after_seq + 1)..)
+                .map(|(_, line)| line)
+                .filter(source_matches)
+                .take(limit)
+                .cloned()
+                .collect()
+        } else if let Some(before_seq) = before_seq {
+            let mut page: Vec<_> = lines
+                .range(..before_seq)
+                .rev()
+                .map(|(_, line)| line)
+                .filter(source_matches)
+                .take(limit)
+                .cloned()
+                .collect();
+            page.reverse();
+            page
+        } else {
+            let mut page: Vec<_> = lines
+                .iter()
+                .rev()
+                .map(|(_, line)| line)
+                .filter(source_matches)
+                .take(limit)
+                .cloned()
+                .collect();
+            page.reverse();
+            page
+        };
+
+        selected.sort_by_key(|line| line.line_seq);
+        let oldest_seq = selected.first().map(|line| line.line_seq);
+        let newest_seq = selected.last().map(|line| line.line_seq);
+        let has_more_older = oldest_seq
+            .map(|oldest| {
+                lines.range(..oldest).map(|(_, line)| line).any(|line| {
+                    source_key
+                        .map(|source| line.source_key() == source)
+                        .unwrap_or(true)
+                })
+            })
+            .unwrap_or(false);
+        let has_more_newer = newest_seq
+            .map(|newest| {
+                lines
+                    .range((newest + 1)..)
+                    .map(|(_, line)| line)
+                    .any(|line| {
+                        source_key
+                            .map(|source| line.source_key() == source)
+                            .unwrap_or(true)
+                    })
+            })
+            .unwrap_or(false);
+
+        LineHistoryPage {
+            lines: selected,
+            oldest_seq,
+            newest_seq,
+            has_more_older,
+            has_more_newer,
+        }
+    }
+
+    fn append(&self, op: &HistoryOp) -> Result<(), HistoryError> {
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let _guard = self.append_lock.lock();
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)?;
+        serde_json::to_writer(&mut file, op)?;
+        file.write_all(b"\n")?;
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bridge_protocol::{PipeLineMeta, PROTOCOL_VERSION};
+
+    fn line(seq: u64) -> LineRecord {
+        LineRecord {
+            line_id: seq,
+            line_seq: seq,
+            timestamp_unix_ms: 1_000 + seq as i64,
+            text: format!("line {seq}"),
+            meta: PipeLineMeta {
+                process_id: 1,
+                thread_number: 2,
+                thread_name: Some("hook".to_owned()),
+                window_title: Some("Game Window".to_owned()),
+                is_current_select: true,
+                arch: "x64".to_owned(),
+                source: format!("proto {PROTOCOL_VERSION}"),
+            },
+            screenshot: None,
+            audio: None,
+            warnings: vec![],
+            ignored: false,
+        }
+    }
+
+    #[test]
+    fn paginates_recent_and_older_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = HistoryStore::load(tmp.path().join("history.jsonl")).unwrap();
+        for seq in 1..=5 {
+            store.upsert(line(seq)).unwrap();
+        }
+
+        let recent = store.page(2, None, None, None);
+        assert_eq!(
+            recent
+                .lines
+                .iter()
+                .map(|line| line.line_seq)
+                .collect::<Vec<_>>(),
+            vec![4, 5]
+        );
+        assert!(recent.has_more_older);
+
+        let older = store.page(2, Some(4), None, None);
+        assert_eq!(
+            older
+                .lines
+                .iter()
+                .map(|line| line.line_seq)
+                .collect::<Vec<_>>(),
+            vec![2, 3]
+        );
+        assert!(older.has_more_older);
+        assert!(older.has_more_newer);
+    }
+}

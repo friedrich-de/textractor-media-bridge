@@ -1,0 +1,47 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / Vite
+/web_ui/node_modules/
+/web_ui/dist/
+/web_ui/.vite/
+/web_ui/.eslintcache
+
+# Local configuration and runtime data
+/config/bridge.toml
+/data/
+/assets/
+/.env
+/.env.*
+!.env.example
+
+# Vendored binary/tool downloads
+/vendor/ffmpeg/
+*.zip
+*.7z
+*.tar
+*.tar.gz
+
+# Build outputs and debug symbols
+*.dll
+*.exe
+*.ilk
+*.lib
+*.obj
+*.pdb
+
+# Logs, temp files, and editor/OS noise
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+/.idea/
+/.vscode/

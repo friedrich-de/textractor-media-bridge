@@ -1,0 +1,38 @@
+[workspace]
+members = [
+    "crates/bridge_protocol",
+    "crates/textractor_bridge_dll",
+    "crates/textractor_bridge_server",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://example.invalid/local/vn-miner"
+
+[workspace.dependencies]
+anyhow = "1"
+async-stream = "0.3"
+axum = { version = "0.8", features = ["json", "macros"] }
+base64 = "0.22"
+chrono = { version = "0.4", features = ["clock", "serde"] }
+crossbeam-channel = "0.5"
+dirs = "6"
+futures-util = "0.3"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+mime_guess = "2"
+parking_lot = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+toml = "0.8"
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+windows = "0.62"
+windows-sys = "0.61"
