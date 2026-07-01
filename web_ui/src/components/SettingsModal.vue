@@ -204,87 +204,20 @@
                 </select>
               </label>
 
-              <label class="field compact">
-                <span>Activity threshold</span>
+              <label
+                v-for="field in normalAudioFields"
+                :key="field.key"
+                class="field compact"
+                :class="{ 'span-two': field.spanTwo }"
+              >
+                <span>{{ field.label }}</span>
                 <input
-                  v-model.number="localAudioConfig.activity_threshold"
-                  name="audio_activity_threshold"
+                  v-model.number="localAudioConfig[field.key]"
+                  :name="field.name"
                   type="number"
-                  min="1"
-                  max="30000"
-                  step="1"
-                />
-              </label>
-
-              <label class="field compact">
-                <span>Minimum activity (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.min_activity_ms"
-                  name="audio_min_activity_ms"
-                  type="number"
-                  min="1"
-                  max="1000"
-                  step="1"
-                />
-              </label>
-
-              <label class="field compact">
-                <span>Pre-roll (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.ready_preroll_ms"
-                  name="audio_ready_preroll_ms"
-                  type="number"
-                  min="0"
-                  max="5000"
-                  step="100"
-                />
-              </label>
-
-              <label class="field compact">
-                <span>Trailing silence (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.trailing_silence_ms"
-                  name="audio_trailing_silence_ms"
-                  type="number"
-                  min="100"
-                  max="15000"
-                  step="100"
-                />
-              </label>
-
-              <label class="field compact">
-                <span>No speech timeout (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.no_speech_timeout_ms"
-                  name="audio_no_speech_timeout_ms"
-                  type="number"
-                  min="500"
-                  max="30000"
-                  step="250"
-                />
-              </label>
-
-              <label class="field compact">
-                <span>Auto trim padding (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.trim_padding_ms"
-                  name="audio_trim_padding_ms"
-                  type="number"
-                  min="0"
-                  max="5000"
-                  step="100"
-                />
-              </label>
-
-              <label class="field compact">
-                <span>Max duration (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.max_duration_ms"
-                  name="audio_max_duration_ms"
-                  type="number"
-                  min="1000"
-                  max="300000"
-                  step="1000"
+                  :min="field.min"
+                  :max="field.max"
+                  :step="field.step"
                 />
               </label>
             </div>
@@ -296,63 +229,20 @@
             </div>
 
             <div class="settings-grid">
-              <label class="field compact">
-                <span>Activity threshold</span>
+              <label
+                v-for="field in trimAudioFields"
+                :key="field.key"
+                class="field compact"
+                :class="{ 'span-two': field.spanTwo }"
+              >
+                <span>{{ field.label }}</span>
                 <input
-                  v-model.number="localAudioConfig.trim_activity_threshold"
-                  name="audio_trim_activity_threshold"
+                  v-model.number="localAudioConfig[field.key]"
+                  :name="field.name"
                   type="number"
-                  min="1"
-                  max="30000"
-                  step="1"
-                />
-              </label>
-
-              <label class="field compact">
-                <span>Minimum activity (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.trim_min_activity_ms"
-                  name="audio_trim_min_activity_ms"
-                  type="number"
-                  min="1"
-                  max="1000"
-                  step="1"
-                />
-              </label>
-
-              <label class="field compact">
-                <span>Pre-roll (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.trim_source_preroll_ms"
-                  name="audio_trim_source_preroll_ms"
-                  type="number"
-                  min="0"
-                  max="5000"
-                  step="100"
-                />
-              </label>
-
-              <label class="field compact">
-                <span>Trailing silence (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.trim_trailing_silence_ms"
-                  name="audio_trim_trailing_silence_ms"
-                  type="number"
-                  min="500"
-                  max="20000"
-                  step="250"
-                />
-              </label>
-
-              <label class="field compact span-two">
-                <span>No speech timeout (ms)</span>
-                <input
-                  v-model.number="localAudioConfig.trim_no_speech_timeout_ms"
-                  name="audio_trim_no_speech_timeout_ms"
-                  type="number"
-                  min="1000"
-                  max="60000"
-                  step="500"
+                  :min="field.min"
+                  :max="field.max"
+                  :step="field.step"
                 />
               </label>
             </div>
@@ -386,6 +276,13 @@ import { LoaderCircle, PlugZap, RefreshCw, RotateCcw, X } from 'lucide-vue-next'
 
 import { getModelsWithFields, getVersion } from '@/api/ankiConnect';
 import type { AudioConfig } from '@/api/types';
+import {
+  cloneAudioConfig,
+  defaultAudioConfig,
+  normalAudioFields,
+  normalizeAudioConfig,
+  trimAudioFields,
+} from '@/lib/audioSettings';
 import type { MinerSettings } from '@/lib/minerSettings';
 import { cloneMinerSettings, defaultMinerSettings } from '@/lib/minerSettings';
 
@@ -405,24 +302,6 @@ const emit = defineEmits<{
 }>();
 
 type ConnectionStatus = 'untested' | 'testing' | 'connected' | 'error';
-
-const defaultAudioConfig: AudioConfig = {
-  backend: 'auto',
-  vad: 'webrtc',
-  format: 'wav',
-  ready_preroll_ms: 1_000,
-  trailing_silence_ms: 3_000,
-  no_speech_timeout_ms: 5_000,
-  trim_source_preroll_ms: 1_000,
-  trim_trailing_silence_ms: 5_000,
-  trim_no_speech_timeout_ms: 8_000,
-  activity_threshold: 300,
-  min_activity_ms: 30,
-  trim_activity_threshold: 300,
-  trim_min_activity_ms: 30,
-  trim_padding_ms: 1_000,
-  max_duration_ms: 120_000,
-};
 
 const localSettings = reactive<MinerSettings>(cloneMinerSettings(props.settings));
 const localAudioConfig = reactive<AudioConfig>(
@@ -519,41 +398,7 @@ function resetAudioDefaults(): void {
 function save(): void {
   emit('save', {
     settings: cloneMinerSettings(localSettings),
-    audioConfig: normalizedAudioConfig(),
+    audioConfig: normalizeAudioConfig(localAudioConfig),
   });
-}
-
-function cloneAudioConfig(config: AudioConfig): AudioConfig {
-  return { ...defaultAudioConfig, ...config };
-}
-
-function normalizedAudioConfig(): AudioConfig {
-  return {
-    ...localAudioConfig,
-    backend: localAudioConfig.backend || defaultAudioConfig.backend,
-    vad: localAudioConfig.vad || defaultAudioConfig.vad,
-    format: localAudioConfig.format || defaultAudioConfig.format,
-    ready_preroll_ms: clampInteger(localAudioConfig.ready_preroll_ms, 0, 5_000),
-    trailing_silence_ms: clampInteger(localAudioConfig.trailing_silence_ms, 100, 15_000),
-    no_speech_timeout_ms: clampInteger(localAudioConfig.no_speech_timeout_ms, 500, 30_000),
-    trim_source_preroll_ms: clampInteger(localAudioConfig.trim_source_preroll_ms, 0, 5_000),
-    trim_trailing_silence_ms: clampInteger(localAudioConfig.trim_trailing_silence_ms, 500, 20_000),
-    trim_no_speech_timeout_ms: clampInteger(
-      localAudioConfig.trim_no_speech_timeout_ms,
-      1_000,
-      60_000,
-    ),
-    activity_threshold: clampInteger(localAudioConfig.activity_threshold, 1, 30_000),
-    min_activity_ms: clampInteger(localAudioConfig.min_activity_ms, 1, 1_000),
-    trim_activity_threshold: clampInteger(localAudioConfig.trim_activity_threshold, 1, 30_000),
-    trim_min_activity_ms: clampInteger(localAudioConfig.trim_min_activity_ms, 1, 1_000),
-    trim_padding_ms: clampInteger(localAudioConfig.trim_padding_ms, 0, 5_000),
-    max_duration_ms: clampInteger(localAudioConfig.max_duration_ms, 1_000, 300_000),
-  };
-}
-
-function clampInteger(value: number, min: number, max: number): number {
-  const parsed = Number.isFinite(value) ? Math.trunc(value) : min;
-  return Math.min(Math.max(parsed, min), max);
 }
 </script>

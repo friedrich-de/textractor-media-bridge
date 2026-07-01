@@ -97,28 +97,13 @@ export interface AppConfig {
   };
   audio: AudioConfig;
   anki: {
-    endpoint: string;
-    mode: MiningMode;
-    max_latest_card_age_minutes: number;
-    overwrite_sentence_field: boolean;
-    fallback_create_note: boolean;
     range_sentence_separator: string;
     range_screenshot_pick: RangeScreenshotPick;
-    deck_name: string;
-    model_name: string;
-    sentence_field: string;
-    notes_field: string;
-    screenshot_field: string;
-    audio_field: string;
-    source_field: string;
-    tags: string[];
   };
 }
 
 export interface AudioConfig {
   backend: string;
-  vad: string;
-  format: string;
   ready_preroll_ms: number;
   trailing_silence_ms: number;
   no_speech_timeout_ms: number;
@@ -143,7 +128,6 @@ export interface PublicConfig {
 }
 
 export type RangeScreenshotPick = 'first' | 'last';
-export type MiningMode = 'update_latest';
 
 export interface MinePrepareRequest {
   lineIds: LineId[];

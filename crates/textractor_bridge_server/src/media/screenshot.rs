@@ -32,50 +32,65 @@ pub enum ScreenshotError {
     Image(#[from] image::ImageError),
 }
 
-pub trait ScreenshotBackend: Send + Sync {
-    fn capture_window(&self, hwnd: NativeHwnd) -> Result<CapturedScreenshot, ScreenshotError>;
-}
-
 #[derive(Debug, Clone)]
 pub struct ScreenshotManager {
-    backend: String,
+    backend: ScreenshotBackend,
 }
 
 impl ScreenshotManager {
     pub fn new(backend: impl Into<String>) -> Self {
         Self {
-            backend: backend.into(),
+            backend: ScreenshotBackend::from_config(&backend.into()),
         }
     }
 
     pub fn enabled(&self) -> bool {
-        self.backend != "off"
+        self.backend != ScreenshotBackend::Off
     }
 
     pub fn capture_window(&self, hwnd: NativeHwnd) -> Result<CapturedScreenshot, ScreenshotError> {
-        match self.backend.to_ascii_lowercase().as_str() {
-            "off" => Err(ScreenshotError::Disabled),
-            "gdi" | "win32-gdi" => GdiWindowCaptureBackend.capture_window(hwnd),
-            "wgc" | "windows-graphics-capture" => WgcWindowCaptureBackend.capture_window(hwnd),
-            "auto" | "" => capture_auto(hwnd),
-            _ => capture_auto(hwnd),
+        match self.backend {
+            ScreenshotBackend::Off => Err(ScreenshotError::Disabled),
+            ScreenshotBackend::Gdi => capture_gdi(hwnd),
+            ScreenshotBackend::Wgc => capture_wgc(hwnd),
+            ScreenshotBackend::Auto => capture_auto(hwnd),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScreenshotBackend {
+    Off,
+    Auto,
+    Wgc,
+    Gdi,
+}
+
+impl ScreenshotBackend {
+    fn from_config(value: &str) -> Self {
+        match value.to_ascii_lowercase().as_str() {
+            "off" => Self::Off,
+            "gdi" | "win32-gdi" => Self::Gdi,
+            "wgc" | "windows-graphics-capture" => Self::Wgc,
+            "auto" | "" => Self::Auto,
+            _ => Self::Auto,
         }
     }
 }
 
 fn capture_auto(hwnd: NativeHwnd) -> Result<CapturedScreenshot, ScreenshotError> {
-    match WgcWindowCaptureBackend.capture_window(hwnd) {
+    match capture_wgc(hwnd) {
         Ok(wgc) if frame_is_plausible(&wgc.bytes) => Ok(wgc),
-        Ok(wgc) => match GdiWindowCaptureBackend.capture_window(hwnd) {
+        Ok(wgc) => match capture_gdi(hwnd) {
             Ok(gdi) if frame_is_plausible(&gdi.bytes) => Ok(gdi),
             Ok(_) | Err(_) => Ok(wgc),
         },
-        Err(wgc_error) => GdiWindowCaptureBackend
-            .capture_window(hwnd)
-            .map_err(|gdi_error| ScreenshotError::AllBackendsFailed {
+        Err(wgc_error) => {
+            capture_gdi(hwnd).map_err(|gdi_error| ScreenshotError::AllBackendsFailed {
                 wgc: Box::new(wgc_error),
                 gdi: Box::new(gdi_error),
-            }),
+            })
+        }
     }
 }
 
@@ -113,20 +128,12 @@ fn frame_is_plausible(png_bytes: &[u8]) -> bool {
     sampled < 32 || different >= 2
 }
 
-pub struct WgcWindowCaptureBackend;
-
-impl ScreenshotBackend for WgcWindowCaptureBackend {
-    fn capture_window(&self, hwnd: NativeHwnd) -> Result<CapturedScreenshot, ScreenshotError> {
-        platform_wgc_capture_window(hwnd)
-    }
+fn capture_wgc(hwnd: NativeHwnd) -> Result<CapturedScreenshot, ScreenshotError> {
+    platform_wgc_capture_window(hwnd)
 }
 
-pub struct GdiWindowCaptureBackend;
-
-impl ScreenshotBackend for GdiWindowCaptureBackend {
-    fn capture_window(&self, hwnd: NativeHwnd) -> Result<CapturedScreenshot, ScreenshotError> {
-        platform_capture_window(hwnd)
-    }
+fn capture_gdi(hwnd: NativeHwnd) -> Result<CapturedScreenshot, ScreenshotError> {
+    platform_capture_window(hwnd)
 }
 
 #[cfg(windows)]

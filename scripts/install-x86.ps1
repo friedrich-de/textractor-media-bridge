@@ -8,12 +8,28 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Split-Path -Parent $ScriptDir
 $SourceServer = Join-Path $RepoRoot "target\release\textractor_bridge_server.exe"
+$SourceBridgeDll = Join-Path $RepoRoot "target\i686-pc-windows-msvc\release\textractor_bridge_dll.dll"
+$SourceFfmpeg = Join-Path $RepoRoot "vendor\ffmpeg\ffmpeg.exe"
+if (-not (Test-Path -LiteralPath $SourceFfmpeg -PathType Leaf)) {
+    $SourceFfmpeg = Join-Path $RepoRoot "vendor\ffmpeg\bin\ffmpeg.exe"
+}
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 $ServerPath = Join-Path $InstallRoot "textractor_bridge_server.exe"
+$BridgeDllPath = Join-Path $InstallRoot "Textractor Media Bridge.xdll"
+$LegacyBridgeDllPath = Join-Path $InstallRoot "Textractor Media Bridge.dll"
+$FfmpegPath = Join-Path $InstallRoot "ffmpeg.exe"
 $WebRoot = Join-Path $InstallRoot "web_ui"
 
 if (-not (Test-Path -LiteralPath $SourceServer -PathType Leaf)) {
     throw "Missing $SourceServer. Run: cargo build -p textractor_bridge_server --release"
+}
+
+if (-not (Test-Path -LiteralPath $SourceBridgeDll -PathType Leaf)) {
+    throw "Missing $SourceBridgeDll. Run: cargo build -p textractor_bridge_dll --release --target i686-pc-windows-msvc"
+}
+
+if (-not (Test-Path -LiteralPath $SourceFfmpeg -PathType Leaf)) {
+    throw "Missing ffmpeg.exe under vendor\ffmpeg"
 }
 
 if (-not (Test-Path -LiteralPath $InstallRoot -PathType Container)) {
@@ -35,6 +51,9 @@ function Assert-UnderInstallRoot {
 }
 
 Assert-UnderInstallRoot $ServerPath
+Assert-UnderInstallRoot $BridgeDllPath
+Assert-UnderInstallRoot $LegacyBridgeDllPath
+Assert-UnderInstallRoot $FfmpegPath
 Assert-UnderInstallRoot $WebRoot
 
 $ExistingServer = Get-CimInstance Win32_Process |
@@ -45,6 +64,11 @@ foreach ($Process in $ExistingServer) {
 
 Start-Sleep -Milliseconds 700
 Copy-Item -LiteralPath $SourceServer -Destination $ServerPath -Force
+Copy-Item -LiteralPath $SourceBridgeDll -Destination $BridgeDllPath -Force
+if (Test-Path -LiteralPath $LegacyBridgeDllPath) {
+    Remove-Item -LiteralPath $LegacyBridgeDllPath -Force
+}
+Copy-Item -LiteralPath $SourceFfmpeg -Destination $FfmpegPath -Force
 
 if (Test-Path -LiteralPath $WebRoot) {
     Assert-UnderInstallRoot $WebRoot
@@ -57,6 +81,8 @@ if (-not $NoRestart) {
 }
 
 Get-Item -LiteralPath $ServerPath | Select-Object FullName, Length
+Get-Item -LiteralPath $BridgeDllPath | Select-Object FullName, Length
+Get-Item -LiteralPath $FfmpegPath | Select-Object FullName, Length
 [pscustomobject]@{
     WebUiFolderExists = Test-Path -LiteralPath $WebRoot
     EmbeddedWebUi = $true

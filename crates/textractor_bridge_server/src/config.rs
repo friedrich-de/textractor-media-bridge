@@ -122,14 +122,12 @@ impl Default for PipeConfig {
 #[serde(default)]
 pub struct ScreenshotConfig {
     pub backend: String,
-    pub format: String,
 }
 
 impl Default for ScreenshotConfig {
     fn default() -> Self {
         Self {
             backend: "auto".to_owned(),
-            format: "png".to_owned(),
         }
     }
 }
@@ -138,8 +136,6 @@ impl Default for ScreenshotConfig {
 #[serde(default)]
 pub struct AudioConfig {
     pub backend: String,
-    pub vad: String,
-    pub format: String,
     pub ready_preroll_ms: u64,
     pub trailing_silence_ms: u64,
     pub no_speech_timeout_ms: u64,
@@ -158,8 +154,6 @@ impl Default for AudioConfig {
     fn default() -> Self {
         Self {
             backend: "auto".to_owned(),
-            vad: "webrtc".to_owned(),
-            format: "wav".to_owned(),
             ready_preroll_ms: 1_000,
             trailing_silence_ms: 3_000,
             no_speech_timeout_ms: 5_000,
@@ -195,9 +189,7 @@ impl Default for AssetsConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MiningConfig {
-    pub screenshot_format: String,
     pub screenshot_quality: u8,
-    pub audio_format: String,
     pub audio_bitrate_kbps: u32,
     pub ffmpeg_path: Option<PathBuf>,
 }
@@ -205,9 +197,7 @@ pub struct MiningConfig {
 impl Default for MiningConfig {
     fn default() -> Self {
         Self {
-            screenshot_format: "jpeg".to_owned(),
             screenshot_quality: 85,
-            audio_format: "mp3".to_owned(),
             audio_bitrate_kbps: 96,
             ffmpeg_path: None,
         }
@@ -217,41 +207,15 @@ impl Default for MiningConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AnkiConfig {
-    pub endpoint: String,
-    pub mode: String,
-    pub max_latest_card_age_minutes: u64,
-    pub overwrite_sentence_field: bool,
-    pub fallback_create_note: bool,
     pub range_sentence_separator: String,
     pub range_screenshot_pick: RangeScreenshotPick,
-    pub deck_name: String,
-    pub model_name: String,
-    pub sentence_field: String,
-    pub notes_field: String,
-    pub screenshot_field: String,
-    pub audio_field: String,
-    pub source_field: String,
-    pub tags: Vec<String>,
 }
 
 impl Default for AnkiConfig {
     fn default() -> Self {
         Self {
-            endpoint: "http://127.0.0.1:8765".to_owned(),
-            mode: "update_latest".to_owned(),
-            max_latest_card_age_minutes: 5,
-            overwrite_sentence_field: false,
-            fallback_create_note: false,
             range_sentence_separator: " ".to_owned(),
             range_screenshot_pick: RangeScreenshotPick::Last,
-            deck_name: "Mining".to_owned(),
-            model_name: "Basic".to_owned(),
-            sentence_field: "Sentence".to_owned(),
-            notes_field: "Notes".to_owned(),
-            screenshot_field: "Image".to_owned(),
-            audio_field: "Audio".to_owned(),
-            source_field: "Source".to_owned(),
-            tags: vec!["textractor".to_owned(), "mined".to_owned()],
         }
     }
 }
@@ -260,4 +224,80 @@ impl Default for AnkiConfig {
 #[serde(default)]
 pub struct StorageConfig {
     pub data_dir: Option<PathBuf>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loads_old_config_with_removed_fields() {
+        let text = r#"
+[server]
+bind = "127.0.0.1:7788"
+lan_mode = false
+
+[screenshot]
+backend = "auto"
+format = "png"
+
+[audio]
+backend = "auto"
+vad = "webrtc"
+format = "wav"
+ready_preroll_ms = 1000
+
+[mining]
+screenshot_format = "jpeg"
+screenshot_quality = 85
+audio_format = "mp3"
+audio_bitrate_kbps = 96
+
+[anki]
+endpoint = "http://127.0.0.1:8765"
+mode = "update_latest"
+overwrite_sentence_field = false
+fallback_create_note = false
+range_sentence_separator = " "
+range_screenshot_pick = "last"
+deck_name = "Mining"
+model_name = "Basic"
+sentence_field = "Sentence"
+notes_field = "Notes"
+screenshot_field = "Image"
+audio_field = "Audio"
+source_field = "Source"
+tags = ["textractor", "mined"]
+"#;
+
+        let config: AppConfig = toml::from_str(text).expect("old config should load");
+
+        assert_eq!(config.audio.backend, "auto");
+        assert_eq!(config.audio.ready_preroll_ms, 1_000);
+        assert_eq!(config.mining.screenshot_quality, 85);
+        assert_eq!(config.anki.range_screenshot_pick, RangeScreenshotPick::Last);
+    }
+
+    #[test]
+    fn saved_config_uses_slim_schema() {
+        let text = toml::to_string_pretty(&AppConfig::default()).expect("config serializes");
+
+        for removed in [
+            "vad",
+            "screenshot_format",
+            "audio_format",
+            "overwrite_sentence_field",
+            "fallback_create_note",
+            "deck_name",
+            "notes_field",
+            "tags",
+        ] {
+            assert!(
+                !text.contains(removed),
+                "saved config should not contain removed field {removed}"
+            );
+        }
+        assert!(text.contains("range_sentence_separator"));
+        assert!(text.contains("audio_bitrate_kbps"));
+    }
 }

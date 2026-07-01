@@ -86,6 +86,7 @@
                 <span>Start</span>
                 <input
                   v-model.number="startMs"
+                  name="trim_start_ms"
                   type="number"
                   :min="minStartMs"
                   :max="maxStartMs"
@@ -98,6 +99,7 @@
                 <span>End</span>
                 <input
                   v-model.number="endMs"
+                  name="trim_end_ms"
                   type="number"
                   :min="minEndMs"
                   :max="maxEndMs"
@@ -148,8 +150,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { LoaderCircle, Pause, Play, RotateCcw, Save, X } from 'lucide-vue-next';
 
-import { applyAudioTrim, assetUrl, getAudioTrimInfo } from '@/api/bridge';
+import { applyAudioTrim } from '@/api/bridge';
 import type { AudioState, AudioTrimInfoResponse, LineId, LineRecord } from '@/api/types';
+import { useTrimRangeDrag } from '@/composables/useTrimRangeDrag';
+import { loadAudioTrim } from '@/lib/audioTrimLoader';
+import { createPcm16WavClipUrl, type DecodedPcm16Wav } from '@/lib/wavPreview';
 
 const MIN_DURATION_MS = 100;
 const ACTIVITY_BAR_COUNT = 192;
@@ -164,23 +169,6 @@ const emit = defineEmits<{
   saved: [payload: { lineId: LineId; audio: AudioState | null }];
 }>();
 
-type DragHandle = 'start' | 'end';
-
-type DragState = {
-  handle: DragHandle;
-  left: number;
-  width: number;
-};
-
-type DecodedPcm16Wav = {
-  view: DataView;
-  channels: number;
-  sampleRate: number;
-  bytesPerFrame: number;
-  dataOffset: number;
-  sampleCount: number;
-};
-
 const trimInfo = ref<AudioTrimInfoResponse | null>(null);
 const startMs = ref(0);
 const endMs = ref(0);
@@ -192,15 +180,10 @@ const activityBars = ref<number[]>(Array.from({ length: ACTIVITY_BAR_COUNT }, ()
 const playheadMs = ref(0);
 const audioElement = ref<HTMLAudioElement | null>(null);
 const activityTrack = ref<HTMLElement | null>(null);
-const dragState = ref<DragState | null>(null);
 const previewFrameId = ref<number | null>(null);
 const decodedSource = ref<DecodedPcm16Wav | null>(null);
 const previewUrl = ref<string | null>(null);
-const suppressOverlayClose = ref(false);
 
-const sourceUrl = computed(() =>
-  trimInfo.value ? assetUrl(trimInfo.value.source.url, props.token) : '',
-);
 const selectedDurationMs = computed(() => Math.max(0, Math.round(endMs.value - startMs.value)));
 const minStartMs = computed(() => 0);
 const maxEndMs = computed(() => trimInfo.value?.sourceDurationMs ?? 0);
@@ -248,6 +231,16 @@ const validationMessage = computed(() => {
 const canSave = computed(() =>
   Boolean(trimInfo.value && !saving.value && !validationMessage.value),
 );
+const { beginHandleDrag, stopHandleDrag, suppressOverlayClose } = useTrimRangeDrag({
+  track: activityTrack,
+  sourceDurationMs,
+  startMs,
+  endMs,
+  minStartMs,
+  maxStartMs,
+  minEndMs,
+  maxEndMs,
+});
 
 onMounted(() => {
   void loadTrimInfo();
@@ -269,11 +262,12 @@ async function loadTrimInfo(): Promise<void> {
   loading.value = true;
   error.value = null;
   try {
-    const info = await getAudioTrimInfo(props.token, props.line.lineId);
-    trimInfo.value = info;
-    startMs.value = info.startMs;
-    endMs.value = info.endMs;
-    await loadActivityBars();
+    const loaded = await loadAudioTrim(props.token, props.line.lineId, ACTIVITY_BAR_COUNT);
+    trimInfo.value = loaded.info;
+    startMs.value = loaded.info.startMs;
+    endMs.value = loaded.info.endMs;
+    decodedSource.value = loaded.decodedSource;
+    activityBars.value = loaded.activityBars;
   } catch (loadError) {
     error.value = loadError instanceof Error ? loadError.message : 'Unable to load audio trim.';
   } finally {
@@ -388,147 +382,11 @@ function clampEnd(): void {
   endMs.value = clampNumber(endMs.value, minEndMs.value, maxEndMs.value);
 }
 
-function beginHandleDrag(handle: DragHandle, event: PointerEvent): void {
-  const track = activityTrack.value;
-  const info = trimInfo.value;
-  if (!track || !info) {
-    return;
-  }
-
-  (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
-  const rect = track.getBoundingClientRect();
-  dragState.value = {
-    handle,
-    left: rect.left,
-    width: rect.width,
-  };
-  suppressOverlayClose.value = true;
-  window.addEventListener('pointermove', handleDragMove);
-  window.addEventListener('pointerup', stopHandleDrag, { once: true });
-  handleDragMove(event);
-}
-
-function handleDragMove(event: PointerEvent): void {
-  const drag = dragState.value;
-  const info = trimInfo.value;
-  if (!drag || !info || drag.width <= 0) {
-    return;
-  }
-
-  const ratio = (event.clientX - drag.left) / drag.width;
-  const pointerMs = clampNumber(ratio * info.sourceDurationMs, 0, info.sourceDurationMs);
-  if (drag.handle === 'start') {
-    startMs.value = clampNumber(pointerMs, minStartMs.value, maxStartMs.value);
-    return;
-  }
-
-  endMs.value = clampNumber(pointerMs, minEndMs.value, maxEndMs.value);
-}
-
-function stopHandleDrag(): void {
-  dragState.value = null;
-  window.removeEventListener('pointermove', handleDragMove);
-  window.setTimeout(() => {
-    suppressOverlayClose.value = false;
-  }, 150);
-}
-
 function handleOverlayClick(): void {
   if (suppressOverlayClose.value) {
     return;
   }
   emit('close');
-}
-
-async function loadActivityBars(): Promise<void> {
-  if (!sourceUrl.value) {
-    return;
-  }
-
-  const response = await fetch(sourceUrl.value);
-  if (!response.ok) {
-    throw new Error(`Unable to load audio graph: HTTP ${response.status}`);
-  }
-  decodedSource.value = decodePcm16Wav(await response.arrayBuffer());
-  activityBars.value = buildActivityBars(decodedSource.value, ACTIVITY_BAR_COUNT);
-}
-
-function buildActivityBars(wav: DecodedPcm16Wav, barCount: number): number[] {
-  const bars = Array.from({ length: barCount }, (_, index) => {
-    const start = Math.floor((index / barCount) * wav.sampleCount);
-    const end = Math.max(start + 1, Math.floor(((index + 1) / barCount) * wav.sampleCount));
-    let sumSquares = 0;
-    let count = 0;
-    for (let sampleIndex = start; sampleIndex < end; sampleIndex += 1) {
-      const offset = wav.dataOffset + sampleIndex * wav.bytesPerFrame;
-      let peak = 0;
-      for (let channel = 0; channel < wav.channels; channel += 1) {
-        const value = wav.view.getInt16(offset + channel * 2, true) / 32768;
-        peak = Math.max(peak, Math.abs(value));
-      }
-      sumSquares += peak * peak;
-      count += 1;
-    }
-    return Math.sqrt(sumSquares / Math.max(1, count));
-  });
-
-  const sorted = [...bars].sort((a, b) => a - b);
-  const scale = sorted[Math.floor(sorted.length * 0.95)] || sorted.at(-1) || 1;
-  return bars.map((bar) => Math.min(1, Math.sqrt(bar / Math.max(scale, 0.001))));
-}
-
-function decodePcm16Wav(bytes: ArrayBuffer): DecodedPcm16Wav {
-  const view = new DataView(bytes);
-  if (
-    bytes.byteLength < 44 ||
-    readAscii(view, 0, 4) !== 'RIFF' ||
-    readAscii(view, 8, 4) !== 'WAVE'
-  ) {
-    throw new Error('Unable to read audio graph: unsupported WAV file.');
-  }
-
-  let channels = 0;
-  let sampleRate = 0;
-  let bitsPerSample = 0;
-  let dataOffset = 0;
-  let dataLength = 0;
-  for (let offset = 12; offset + 8 <= bytes.byteLength;) {
-    const chunkId = readAscii(view, offset, 4);
-    const chunkLength = view.getUint32(offset + 4, true);
-    const chunkData = offset + 8;
-    if (chunkData + chunkLength > bytes.byteLength) {
-      throw new Error('Unable to read audio graph: truncated WAV file.');
-    }
-
-    if (chunkId === 'fmt ') {
-      const audioFormat = view.getUint16(chunkData, true);
-      channels = view.getUint16(chunkData + 2, true);
-      sampleRate = view.getUint32(chunkData + 4, true);
-      bitsPerSample = view.getUint16(chunkData + 14, true);
-      if (audioFormat !== 1 || bitsPerSample !== 16 || channels < 1) {
-        throw new Error('Unable to read audio graph: expected PCM16 WAV audio.');
-      }
-    } else if (chunkId === 'data') {
-      dataOffset = chunkData;
-      dataLength = chunkLength;
-    }
-
-    offset = chunkData + chunkLength + (chunkLength % 2);
-  }
-
-  if (!channels || !dataOffset || !dataLength) {
-    throw new Error('Unable to read audio graph: missing WAV audio data.');
-  }
-
-  const bytesPerFrame = channels * 2;
-  return {
-    view,
-    channels,
-    sampleRate,
-    bytesPerFrame,
-    dataOffset,
-    sampleCount: Math.floor(dataLength / bytesPerFrame),
-  };
 }
 
 function createPreviewUrl(): string {
@@ -537,14 +395,7 @@ function createPreviewUrl(): string {
     throw new Error('Audio preview is not ready yet.');
   }
 
-  const startFrame = msToFrame(startMs.value, wav);
-  const endFrame = Math.max(startFrame + 1, msToFrame(endMs.value, wav));
-  const dataStart = wav.dataOffset + startFrame * wav.bytesPerFrame;
-  const dataEnd = wav.dataOffset + Math.min(endFrame, wav.sampleCount) * wav.bytesPerFrame;
-  const dataBytes = new Uint8Array(dataEnd - dataStart);
-  dataBytes.set(new Uint8Array(wav.view.buffer, dataStart, dataBytes.byteLength));
-  const header = wavHeader(dataBytes.byteLength, wav.channels, wav.sampleRate);
-  return URL.createObjectURL(new Blob([header, dataBytes], { type: 'audio/wav' }));
+  return createPcm16WavClipUrl(wav, startMs.value, endMs.value);
 }
 
 function replacePreviewUrl(url: string): void {
@@ -559,29 +410,6 @@ function clearPreviewUrl(): void {
   }
 }
 
-function msToFrame(ms: number, wav: DecodedPcm16Wav): number {
-  return clampNumber((ms * wav.sampleRate) / 1_000, 0, wav.sampleCount);
-}
-
-function wavHeader(dataLength: number, channels: number, sampleRate: number): ArrayBuffer {
-  const header = new ArrayBuffer(44);
-  const view = new DataView(header);
-  writeAscii(view, 0, 'RIFF');
-  view.setUint32(4, 36 + dataLength, true);
-  writeAscii(view, 8, 'WAVE');
-  writeAscii(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, channels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * channels * 2, true);
-  view.setUint16(32, channels * 2, true);
-  view.setUint16(34, 16, true);
-  writeAscii(view, 36, 'data');
-  view.setUint32(40, dataLength, true);
-  return header;
-}
-
 function activityBarStyle(value: number): Record<string, string> {
   const height = Math.max(6, Math.round(value * 100));
   return {
@@ -592,18 +420,6 @@ function activityBarStyle(value: number): Record<string, string> {
 
 function msToPercent(ms: number): number {
   return clampNumber((ms / sourceDurationMs.value) * 100, 0, 100);
-}
-
-function readAscii(view: DataView, offset: number, length: number): string {
-  return Array.from({ length }, (_, index) =>
-    String.fromCharCode(view.getUint8(offset + index)),
-  ).join('');
-}
-
-function writeAscii(view: DataView, offset: number, value: string): void {
-  for (let index = 0; index < value.length; index += 1) {
-    view.setUint8(offset + index, value.charCodeAt(index));
-  }
 }
 
 async function saveTrim(): Promise<void> {

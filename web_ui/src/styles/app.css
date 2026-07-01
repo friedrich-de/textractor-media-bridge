@@ -190,12 +190,8 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 28px;
+  padding: 16px 28px 16px 176px;
   border-bottom: 1px solid var(--line-soft);
-}
-
-.reader-toolbar {
-  padding-left: 176px;
 }
 
 .reader-toolbar.without-title {
@@ -708,21 +704,6 @@ select:focus-visible {
   grid-column: 1 / -1;
 }
 
-.remember-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.remember-row input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--teal);
-}
-
 .media-note {
   color: var(--muted);
   font-weight: 700;
@@ -806,11 +787,7 @@ select:focus-visible {
   .reader-toolbar {
     align-items: flex-start;
     flex-direction: column;
-    padding: 18px;
-  }
-
-  .reader-toolbar {
-    padding-top: 74px;
+    padding: 74px 18px 18px;
   }
 
   .toolbar-cluster {

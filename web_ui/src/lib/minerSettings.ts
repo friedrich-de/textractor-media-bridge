@@ -6,14 +6,12 @@ export interface AnkiSettings {
   modelName: string;
   frontField: string;
   sentenceField: string;
-  notesField: string;
   audioField: string;
   imageField: string;
   sourceField: string;
   maxLatestCardAgeMinutes: number;
   rangeSentenceSeparator: string;
   rangeScreenshotPick: RangeScreenshotPick;
-  tags: string[];
 }
 
 export interface MinerSettings {
@@ -27,14 +25,12 @@ export const defaultMinerSettings: MinerSettings = {
     modelName: 'Lapis',
     frontField: 'Expression',
     sentenceField: 'Sentence',
-    notesField: 'Notes',
     audioField: 'SentenceAudio',
     imageField: 'Picture',
     sourceField: 'Source',
     maxLatestCardAgeMinutes: 5,
     rangeSentenceSeparator: ' ',
     rangeScreenshotPick: 'last',
-    tags: ['textractor', 'mined'],
   },
 };
 
@@ -63,10 +59,6 @@ export function cloneMinerSettings(settings: MinerSettings): MinerSettings {
   return JSON.parse(JSON.stringify(settings)) as MinerSettings;
 }
 
-export function settingsFromServer(serverSettings: Partial<AnkiSettings>): MinerSettings {
-  return mergeSettings({ anki: serverSettings });
-}
-
 function mergeSettings(settings: { anki?: Partial<AnkiSettings> }): MinerSettings {
   const anki = {
     ...defaultMinerSettings.anki,
@@ -80,14 +72,12 @@ function mergeSettings(settings: { anki?: Partial<AnkiSettings> }): MinerSetting
       modelName: anki.modelName,
       frontField: anki.frontField,
       sentenceField: anki.sentenceField,
-      notesField: anki.notesField,
       audioField: anki.audioField,
       imageField: anki.imageField,
       sourceField: anki.sourceField,
       maxLatestCardAgeMinutes: anki.maxLatestCardAgeMinutes,
       rangeSentenceSeparator: anki.rangeSentenceSeparator,
       rangeScreenshotPick: anki.rangeScreenshotPick,
-      tags: anki.tags,
     },
   };
 }

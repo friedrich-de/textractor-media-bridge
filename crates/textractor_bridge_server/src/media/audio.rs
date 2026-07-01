@@ -1,3 +1,12 @@
+mod activity;
+mod wav;
+
+pub use self::wav::{encode_pcm16_wav, slice_pcm16_wav};
+
+use self::{
+    activity::{activity_stats, has_min_activity, trim_to_activity},
+    wav::{duration_ms, ms_to_sample_index},
+};
 use bridge_protocol::{AudioEndReason, AudioState, LineId};
 use parking_lot::{Mutex, RwLock};
 use std::{
@@ -88,8 +97,13 @@ impl AudioManager {
             session.main_finished = true;
             session.clone()
         };
-        let worker = self.workers.lock().get(&session.process_id).cloned();
-        let Some(worker) = worker else {
+        let config = self.config.read().clone();
+        let main_start_unix_ms = session
+            .started_unix_ms
+            .saturating_sub(ms_to_i64(config.ready_preroll_ms));
+        let Some(captured) =
+            self.collect_process_range(session.process_id, main_start_unix_ms, end_unix_ms)
+        else {
             self.sessions.lock().remove(&line_id);
             return Some(FinishedMainAudio::NoAudio {
                 reason: format!(
@@ -99,25 +113,15 @@ impl AudioManager {
             });
         };
 
-        let config = self.config.read().clone();
-        let main_start_unix_ms = session
-            .started_unix_ms
-            .saturating_sub(ms_to_i64(config.ready_preroll_ms));
-        let main_samples = worker
-            .shared
-            .buffer
-            .lock()
-            .collect_range(main_start_unix_ms, end_unix_ms);
-
-        let status = worker.shared.status.lock().clone();
         let Some(trimmed) = trim_to_activity(
-            &main_samples,
+            &captured.samples,
             CAPTURE_SAMPLE_RATE,
             config.activity_threshold,
             config.min_activity_ms,
             config.trim_padding_ms,
         ) else {
-            let reason = no_audio_reason(session.process_id, main_samples.len(), status);
+            let reason =
+                no_audio_reason(session.process_id, captured.samples.len(), captured.status);
             self.sessions.lock().remove(&line_id);
             return Some(FinishedMainAudio::NoAudio { reason });
         };
@@ -149,37 +153,35 @@ impl AudioManager {
         end_unix_ms: i64,
     ) -> Option<FinishedTrimAudio> {
         let session = self.sessions.lock().remove(&line_id)?;
-        let worker = self.workers.lock().get(&session.process_id).cloned();
-        let Some(worker) = worker else {
-            return Some(FinishedTrimAudio::NoAudio {
-                reason: format!(
-                    "audio capture worker for process {} was unavailable",
-                    session.process_id
-                ),
-            });
-        };
-
         let config = self.config.read().clone();
         let source_start_unix_ms = session
             .started_unix_ms
             .saturating_sub(ms_to_i64(config.trim_source_preroll_ms));
-        let source_samples = worker
-            .shared
-            .buffer
-            .lock()
-            .collect_range(source_start_unix_ms, end_unix_ms);
-        if source_samples.is_empty() {
-            return Some(FinishedTrimAudio::NoAudio {
-                reason: format!(
-                    "no trim audio samples captured for process {}",
-                    session.process_id
-                ),
-            });
-        }
+        let captured =
+            match self.collect_process_range(session.process_id, source_start_unix_ms, end_unix_ms)
+            {
+                Some(captured) if !captured.samples.is_empty() => captured,
+                Some(_) => {
+                    return Some(FinishedTrimAudio::NoAudio {
+                        reason: format!(
+                            "no trim audio samples captured for process {}",
+                            session.process_id
+                        ),
+                    });
+                }
+                None => {
+                    return Some(FinishedTrimAudio::NoAudio {
+                        reason: format!(
+                            "audio capture worker for process {} was unavailable",
+                            session.process_id
+                        ),
+                    });
+                }
+            };
 
-        let source_duration_ms = duration_ms(source_samples.len(), CAPTURE_SAMPLE_RATE);
+        let source_duration_ms = duration_ms(captured.samples.len(), CAPTURE_SAMPLE_RATE);
         Some(FinishedTrimAudio::Ready(CapturedTrimAudio {
-            source_bytes: encode_pcm16_wav(&source_samples, CAPTURE_SAMPLE_RATE),
+            source_bytes: encode_pcm16_wav(&captured.samples, CAPTURE_SAMPLE_RATE),
             source_duration_ms,
             start_ms: 0,
             end_ms: source_duration_ms,
@@ -204,68 +206,55 @@ impl AudioManager {
         if session.main_finished {
             return None;
         }
-        let now = unix_ms_now();
-        let elapsed_ms = now.saturating_sub(session.started_unix_ms).max(0) as u64;
         let config = self.config.read().clone();
-        if elapsed_ms >= config.max_duration_ms {
-            return Some(AudioEndReason::MaxDuration);
-        }
-
-        let worker = self.workers.lock().get(&session.process_id).cloned()?;
-        let samples = worker
-            .shared
-            .buffer
-            .lock()
-            .collect_range(session.started_unix_ms, now);
-
-        match activity_stats(&samples, config.trim_activity_threshold) {
-            Some(stats)
-                if stats.active_samples
-                    >= min_active_samples(CAPTURE_SAMPLE_RATE, config.trim_min_activity_ms) =>
-            {
-                let trailing_silence_ms = duration_ms(
-                    samples.len().saturating_sub(stats.last_active_index + 1),
-                    CAPTURE_SAMPLE_RATE,
-                );
-                (trailing_silence_ms >= config.trailing_silence_ms)
-                    .then_some(AudioEndReason::Silence)
-            }
-            _ => (elapsed_ms >= config.no_speech_timeout_ms)
-                .then_some(AudioEndReason::NoSpeechTimeout),
-        }
+        self.detect_session_end(
+            session,
+            EndDetectionRules::main(&config),
+            config.max_duration_ms,
+        )
     }
 
     pub fn trim_line_end_reason(&self, line_id: LineId) -> Option<AudioEndReason> {
         let session = self.sessions.lock().get(&line_id).cloned()?;
+        let config = self.config.read().clone();
+        self.detect_session_end(
+            session,
+            EndDetectionRules::trim(&config),
+            config.max_duration_ms,
+        )
+    }
+
+    fn detect_session_end(
+        &self,
+        session: AudioSession,
+        rules: EndDetectionRules,
+        max_duration_ms: u64,
+    ) -> Option<AudioEndReason> {
         let now = unix_ms_now();
         let elapsed_ms = now.saturating_sub(session.started_unix_ms).max(0) as u64;
-        let config = self.config.read().clone();
-        if elapsed_ms >= config.max_duration_ms {
+        if elapsed_ms >= max_duration_ms {
             return Some(AudioEndReason::MaxDuration);
         }
 
-        let worker = self.workers.lock().get(&session.process_id).cloned()?;
+        let captured =
+            self.collect_process_range(session.process_id, session.started_unix_ms, now)?;
+        detect_end_reason(&captured.samples, elapsed_ms, rules)
+    }
+
+    fn collect_process_range(
+        &self,
+        process_id: u32,
+        start_unix_ms: i64,
+        end_unix_ms: i64,
+    ) -> Option<CapturedRange> {
+        let worker = self.workers.lock().get(&process_id).cloned()?;
         let samples = worker
             .shared
             .buffer
             .lock()
-            .collect_range(session.started_unix_ms, now);
-
-        match activity_stats(&samples, config.activity_threshold) {
-            Some(stats)
-                if stats.active_samples
-                    >= min_active_samples(CAPTURE_SAMPLE_RATE, config.min_activity_ms) =>
-            {
-                let trailing_silence_ms = duration_ms(
-                    samples.len().saturating_sub(stats.last_active_index + 1),
-                    CAPTURE_SAMPLE_RATE,
-                );
-                (trailing_silence_ms >= config.trim_trailing_silence_ms)
-                    .then_some(AudioEndReason::Silence)
-            }
-            _ => (elapsed_ms >= config.trim_no_speech_timeout_ms)
-                .then_some(AudioEndReason::NoSpeechTimeout),
-        }
+            .collect_range(start_unix_ms, end_unix_ms);
+        let status = worker.shared.status.lock().clone();
+        Some(CapturedRange { samples, status })
     }
 
     fn ensure_worker(&self, process_id: u32, config: AudioConfig) {
@@ -324,6 +313,40 @@ struct AudioSession {
     process_id: u32,
     started_unix_ms: i64,
     main_finished: bool,
+}
+
+#[derive(Debug, Clone)]
+struct CapturedRange {
+    samples: Vec<i16>,
+    status: CaptureStatus,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EndDetectionRules {
+    activity_threshold: u16,
+    min_activity_ms: u64,
+    trailing_silence_ms: u64,
+    no_speech_timeout_ms: u64,
+}
+
+impl EndDetectionRules {
+    fn main(config: &AudioConfig) -> Self {
+        Self {
+            activity_threshold: config.activity_threshold,
+            min_activity_ms: config.min_activity_ms,
+            trailing_silence_ms: config.trailing_silence_ms,
+            no_speech_timeout_ms: config.no_speech_timeout_ms,
+        }
+    }
+
+    fn trim(config: &AudioConfig) -> Self {
+        Self {
+            activity_threshold: config.trim_activity_threshold,
+            min_activity_ms: config.trim_min_activity_ms,
+            trailing_silence_ms: config.trim_trailing_silence_ms,
+            no_speech_timeout_ms: config.trim_no_speech_timeout_ms,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -502,210 +525,25 @@ fn no_audio_reason(process_id: u32, sample_count: usize, status: CaptureStatus) 
     "captured audio did not contain enough non-silent samples".to_owned()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct TrimmedSamples {
-    samples: Vec<i16>,
-    start_ms: u64,
-    end_ms: u64,
-}
-
-fn trim_to_activity(
+fn detect_end_reason(
     samples: &[i16],
-    sample_rate: u32,
-    activity_threshold: u16,
-    min_activity_ms: u64,
-    padding_ms: u64,
-) -> Option<TrimmedSamples> {
-    let stats = activity_stats(samples, activity_threshold)?;
-    if stats.active_samples < min_active_samples(sample_rate, min_activity_ms) {
-        return None;
-    }
-
-    let padding = (sample_rate as u64 * padding_ms / 1_000) as usize;
-    let start = stats.first_active_index.saturating_sub(padding);
-    let end = stats
-        .last_active_index
-        .saturating_add(padding)
-        .saturating_add(1)
-        .min(samples.len());
-    Some(TrimmedSamples {
-        samples: samples[start..end].to_vec(),
-        start_ms: duration_ms(start, sample_rate),
-        end_ms: duration_ms(end, sample_rate),
-    })
-}
-
-#[derive(Debug, Clone, Copy)]
-struct ActivityStats {
-    first_active_index: usize,
-    last_active_index: usize,
-    active_samples: usize,
-}
-
-fn activity_stats(samples: &[i16], activity_threshold: u16) -> Option<ActivityStats> {
-    let mut first_active_index = None;
-    let mut last_active_index = 0usize;
-    let mut active_samples = 0usize;
-    for (index, sample) in samples.iter().enumerate() {
-        if sample.unsigned_abs() >= activity_threshold {
-            first_active_index.get_or_insert(index);
-            last_active_index = index;
-            active_samples += 1;
+    elapsed_ms: u64,
+    rules: EndDetectionRules,
+) -> Option<AudioEndReason> {
+    match activity_stats(samples, rules.activity_threshold) {
+        Some(stats) if has_min_activity(&stats, CAPTURE_SAMPLE_RATE, rules.min_activity_ms) => {
+            let trailing_silence_ms = duration_ms(
+                samples.len().saturating_sub(stats.last_active_index + 1),
+                CAPTURE_SAMPLE_RATE,
+            );
+            (trailing_silence_ms >= rules.trailing_silence_ms).then_some(AudioEndReason::Silence)
         }
+        _ => (elapsed_ms >= rules.no_speech_timeout_ms).then_some(AudioEndReason::NoSpeechTimeout),
     }
-
-    first_active_index.map(|first_active_index| ActivityStats {
-        first_active_index,
-        last_active_index,
-        active_samples,
-    })
-}
-
-fn min_active_samples(sample_rate: u32, min_activity_ms: u64) -> usize {
-    ((sample_rate as u64 * min_activity_ms / 1_000) as usize).max(1)
-}
-
-fn duration_ms(sample_count: usize, sample_rate: u32) -> u64 {
-    (sample_count as u64).saturating_mul(1_000) / sample_rate as u64
 }
 
 fn ms_to_i64(ms: u64) -> i64 {
     ms.min(i64::MAX as u64) as i64
-}
-
-fn ms_to_sample_index(offset_ms: u64, duration_ms: u64, sample_count: usize) -> usize {
-    (sample_count as u64)
-        .saturating_mul(offset_ms)
-        .saturating_div(duration_ms.max(1))
-        .min(sample_count as u64) as usize
-}
-
-pub fn encode_pcm16_wav(samples: &[i16], sample_rate: u32) -> Vec<u8> {
-    let data_len = samples.len().saturating_mul(2).min(u32::MAX as usize) as u32;
-    let riff_len = 36u32.saturating_add(data_len);
-    let byte_rate = sample_rate.saturating_mul(2);
-
-    let mut out = Vec::with_capacity(44 + data_len as usize);
-    out.extend_from_slice(b"RIFF");
-    out.extend_from_slice(&riff_len.to_le_bytes());
-    out.extend_from_slice(b"WAVE");
-    out.extend_from_slice(b"fmt ");
-    out.extend_from_slice(&16u32.to_le_bytes());
-    out.extend_from_slice(&1u16.to_le_bytes());
-    out.extend_from_slice(&1u16.to_le_bytes());
-    out.extend_from_slice(&sample_rate.to_le_bytes());
-    out.extend_from_slice(&byte_rate.to_le_bytes());
-    out.extend_from_slice(&2u16.to_le_bytes());
-    out.extend_from_slice(&16u16.to_le_bytes());
-    out.extend_from_slice(b"data");
-    out.extend_from_slice(&data_len.to_le_bytes());
-    for sample in samples {
-        out.extend_from_slice(&sample.to_le_bytes());
-    }
-    out
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SlicedWav {
-    pub bytes: Vec<u8>,
-    pub duration_ms: u64,
-}
-
-pub fn slice_pcm16_wav(bytes: &[u8], start_ms: u64, end_ms: u64) -> Result<SlicedWav, String> {
-    let wav = decode_pcm16_wav(bytes)?;
-    let source_duration_ms = duration_ms(wav.samples.len(), wav.sample_rate);
-    if start_ms >= end_ms || end_ms > source_duration_ms {
-        return Err(format!(
-            "invalid trim range {start_ms}..{end_ms}ms for {source_duration_ms}ms audio"
-        ));
-    }
-
-    let start_index = ms_to_sample_index(start_ms, source_duration_ms, wav.samples.len());
-    let end_index = ms_to_sample_index(end_ms, source_duration_ms, wav.samples.len());
-    if end_index <= start_index {
-        return Err("trim range produced no audio samples".to_owned());
-    }
-
-    let samples = wav.samples[start_index..end_index].to_vec();
-    let duration_ms = duration_ms(samples.len(), wav.sample_rate);
-    Ok(SlicedWav {
-        bytes: encode_pcm16_wav(&samples, wav.sample_rate),
-        duration_ms,
-    })
-}
-
-struct DecodedPcm16Wav {
-    sample_rate: u32,
-    samples: Vec<i16>,
-}
-
-fn decode_pcm16_wav(bytes: &[u8]) -> Result<DecodedPcm16Wav, String> {
-    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
-        return Err("unsupported WAV file; expected RIFF/WAVE".to_owned());
-    }
-
-    let mut offset = 12usize;
-    let mut sample_rate = None;
-    let mut data = None;
-
-    while offset.saturating_add(8) <= bytes.len() {
-        let chunk_id = &bytes[offset..offset + 4];
-        let chunk_len = u32::from_le_bytes([
-            bytes[offset + 4],
-            bytes[offset + 5],
-            bytes[offset + 6],
-            bytes[offset + 7],
-        ]) as usize;
-        let data_start = offset + 8;
-        let data_end = data_start
-            .checked_add(chunk_len)
-            .ok_or_else(|| "WAV chunk length overflow".to_owned())?;
-        if data_end > bytes.len() {
-            return Err("truncated WAV chunk".to_owned());
-        }
-
-        match chunk_id {
-            b"fmt " => {
-                if chunk_len < 16 {
-                    return Err("invalid WAV fmt chunk".to_owned());
-                }
-                let audio_format = u16::from_le_bytes([bytes[data_start], bytes[data_start + 1]]);
-                let channels = u16::from_le_bytes([bytes[data_start + 2], bytes[data_start + 3]]);
-                let rate = u32::from_le_bytes([
-                    bytes[data_start + 4],
-                    bytes[data_start + 5],
-                    bytes[data_start + 6],
-                    bytes[data_start + 7],
-                ]);
-                let bits_per_sample =
-                    u16::from_le_bytes([bytes[data_start + 14], bytes[data_start + 15]]);
-                if audio_format != 1 || channels != 1 || bits_per_sample != 16 {
-                    return Err("unsupported WAV format; expected PCM16 mono".to_owned());
-                }
-                sample_rate = Some(rate);
-            }
-            b"data" => {
-                if chunk_len % 2 != 0 {
-                    return Err("invalid PCM16 WAV data length".to_owned());
-                }
-                let samples = bytes[data_start..data_end]
-                    .chunks_exact(2)
-                    .map(|sample| i16::from_le_bytes([sample[0], sample[1]]))
-                    .collect::<Vec<_>>();
-                data = Some(samples);
-            }
-            _ => {}
-        }
-
-        offset = data_end + usize::from(chunk_len % 2 == 1);
-    }
-
-    let sample_rate = sample_rate.ok_or_else(|| "WAV fmt chunk was not found".to_owned())?;
-    let samples = data.ok_or_else(|| "WAV data chunk was not found".to_owned())?;
-    Ok(DecodedPcm16Wav {
-        sample_rate,
-        samples,
-    })
 }
 
 #[cfg(windows)]
@@ -922,122 +760,9 @@ mod windows_capture {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
-pub struct VadRules {
-    pub trailing_silence_ms: u64,
-    pub no_speech_timeout_ms: u64,
-    pub max_duration_ms: u64,
-    pub speech_start_consecutive_frames: u8,
-}
-
-impl From<&AudioConfig> for VadRules {
-    fn from(config: &AudioConfig) -> Self {
-        Self {
-            trailing_silence_ms: config.trailing_silence_ms,
-            no_speech_timeout_ms: config.no_speech_timeout_ms,
-            max_duration_ms: config.max_duration_ms,
-            speech_start_consecutive_frames: 3,
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct VadSegmenter {
-    rules: VadRules,
-    elapsed_ms: u64,
-    consecutive_voiced: u8,
-    speech_detected: bool,
-    last_voiced_ms: Option<u64>,
-    finalized: bool,
-}
-
-#[allow(dead_code)]
-impl VadSegmenter {
-    pub fn new(rules: VadRules) -> Self {
-        Self {
-            rules,
-            elapsed_ms: 0,
-            consecutive_voiced: 0,
-            speech_detected: false,
-            last_voiced_ms: None,
-            finalized: false,
-        }
-    }
-
-    pub fn push_frame(&mut self, voiced: bool, frame_ms: u64) -> Option<AudioEndReason> {
-        if self.finalized {
-            return None;
-        }
-
-        self.elapsed_ms = self.elapsed_ms.saturating_add(frame_ms);
-        if voiced {
-            self.consecutive_voiced = self.consecutive_voiced.saturating_add(1);
-            self.last_voiced_ms = Some(self.elapsed_ms);
-            if self.consecutive_voiced >= self.rules.speech_start_consecutive_frames {
-                self.speech_detected = true;
-            }
-        } else {
-            self.consecutive_voiced = 0;
-        }
-
-        let reason = if self.speech_detected {
-            self.last_voiced_ms.and_then(|last| {
-                (self.elapsed_ms.saturating_sub(last) >= self.rules.trailing_silence_ms)
-                    .then_some(AudioEndReason::Silence)
-            })
-        } else if self.elapsed_ms >= self.rules.no_speech_timeout_ms {
-            Some(AudioEndReason::NoSpeechTimeout)
-        } else if self.elapsed_ms >= self.rules.max_duration_ms {
-            Some(AudioEndReason::MaxDuration)
-        } else {
-            None
-        };
-
-        if reason.is_some() {
-            self.finalized = true;
-        }
-        reason
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn rules() -> VadRules {
-        VadRules {
-            trailing_silence_ms: 600,
-            no_speech_timeout_ms: 5_000,
-            max_duration_ms: 120_000,
-            speech_start_consecutive_frames: 3,
-        }
-    }
-
-    #[test]
-    fn vad_detects_trailing_silence_after_speech() {
-        let mut vad = VadSegmenter::new(rules());
-        assert_eq!(vad.push_frame(true, 20), None);
-        assert_eq!(vad.push_frame(true, 20), None);
-        assert_eq!(vad.push_frame(true, 20), None);
-        for _ in 0..29 {
-            assert_eq!(vad.push_frame(false, 20), None);
-        }
-        assert_eq!(vad.push_frame(false, 20), Some(AudioEndReason::Silence));
-    }
-
-    #[test]
-    fn vad_detects_no_speech_timeout() {
-        let mut vad = VadSegmenter::new(rules());
-        for _ in 0..249 {
-            assert_eq!(vad.push_frame(false, 20), None);
-        }
-        assert_eq!(
-            vad.push_frame(false, 20),
-            Some(AudioEndReason::NoSpeechTimeout)
-        );
-    }
 
     #[test]
     fn rolling_buffer_collects_overlapping_range() {
@@ -1060,61 +785,50 @@ mod tests {
     }
 
     #[test]
-    fn trim_to_activity_keeps_padding_and_rejects_silence() {
-        let config = AudioConfig::default();
-        assert!(trim_to_activity(
-            &vec![0; 4_800],
-            CAPTURE_SAMPLE_RATE,
-            config.activity_threshold,
-            config.min_activity_ms,
-            config.trim_padding_ms,
-        )
-        .is_none());
+    fn end_detection_rules_keep_normal_and_trim_settings_separate() {
+        let mut config = AudioConfig::default();
+        config.activity_threshold = 100;
+        config.min_activity_ms = 20;
+        config.trailing_silence_ms = 3_000;
+        config.no_speech_timeout_ms = 4_000;
+        config.trim_activity_threshold = 200;
+        config.trim_min_activity_ms = 40;
+        config.trim_trailing_silence_ms = 5_000;
+        config.trim_no_speech_timeout_ms = 8_000;
 
-        let mut samples = vec![0; 100_000];
-        for sample in samples.iter_mut().take(52_000).skip(50_000) {
-            *sample = 1_000;
-        }
-        let trimmed = trim_to_activity(
-            &samples,
-            CAPTURE_SAMPLE_RATE,
-            config.activity_threshold,
-            config.min_activity_ms,
-            config.trim_padding_ms,
-        )
-        .unwrap();
-        assert_eq!(trimmed.samples.len(), 98_000);
-        assert_eq!(trimmed.start_ms, 41);
-        assert_eq!(trimmed.end_ms, 2083);
-        assert!(trimmed.samples.len() < samples.len());
+        let main = EndDetectionRules::main(&config);
+        let trim = EndDetectionRules::trim(&config);
+
+        assert_eq!(main.activity_threshold, 100);
+        assert_eq!(main.min_activity_ms, 20);
+        assert_eq!(main.trailing_silence_ms, 3_000);
+        assert_eq!(main.no_speech_timeout_ms, 4_000);
+        assert_eq!(trim.activity_threshold, 200);
+        assert_eq!(trim.min_activity_ms, 40);
+        assert_eq!(trim.trailing_silence_ms, 5_000);
+        assert_eq!(trim.no_speech_timeout_ms, 8_000);
     }
 
     #[test]
-    fn wav_encoder_writes_pcm16_header() {
-        let wav = encode_pcm16_wav(&[0, i16::MAX, i16::MIN], 48_000);
-        assert_eq!(&wav[0..4], b"RIFF");
-        assert_eq!(&wav[8..12], b"WAVE");
-        assert_eq!(&wav[12..16], b"fmt ");
-        assert_eq!(&wav[36..40], b"data");
-        assert_eq!(u32::from_le_bytes([wav[40], wav[41], wav[42], wav[43]]), 6);
-        assert_eq!(wav.len(), 50);
-    }
+    fn detect_end_reason_respects_trailing_silence_rule() {
+        let mut samples = vec![1_000; 2_400];
+        samples.extend(vec![0; 144_000]);
 
-    #[test]
-    fn wav_slicer_crops_pcm16_ranges() {
-        let samples = (0..48_000).map(|value| value as i16).collect::<Vec<_>>();
-        let wav = encode_pcm16_wav(&samples, 48_000);
+        let short_rule = EndDetectionRules {
+            activity_threshold: 300,
+            min_activity_ms: 30,
+            trailing_silence_ms: 3_000,
+            no_speech_timeout_ms: 10_000,
+        };
+        let long_rule = EndDetectionRules {
+            trailing_silence_ms: 5_000,
+            ..short_rule
+        };
 
-        let sliced = slice_pcm16_wav(&wav, 250, 750).unwrap();
-        assert_eq!(sliced.duration_ms, 500);
-
-        let decoded = decode_pcm16_wav(&sliced.bytes).unwrap();
-        assert_eq!(decoded.samples.len(), 24_000);
-        assert_eq!(decoded.samples[0], samples[12_000]);
-    }
-
-    #[test]
-    fn wav_slicer_rejects_unsupported_audio() {
-        assert!(slice_pcm16_wav(b"not a wav", 0, 100).is_err());
+        assert_eq!(
+            detect_end_reason(&samples, 3_500, short_rule),
+            Some(AudioEndReason::Silence)
+        );
+        assert_eq!(detect_end_reason(&samples, 3_500, long_rule), None);
     }
 }
