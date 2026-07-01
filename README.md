@@ -16,19 +16,19 @@ docs/ARCHITECTURE.md            Architecture notes and current limitations
 
 ## Build
 
-Install Rust with the MSVC toolchain. Build the server and the DLL for your host architecture:
-
-```powershell
-cargo build --release
-```
-
-Build the browser UI:
+Install Rust with the MSVC toolchain. Build the browser UI first; the server embeds `web_ui/dist` into the executable:
 
 ```powershell
 cd web_ui
 npm install
 npm run build
 cd ..
+```
+
+Build the server and the DLL for your host architecture:
+
+```powershell
+cargo build --release
 ```
 
 Build a 64-bit Textractor DLL:
@@ -52,6 +52,24 @@ target/release/textractor_bridge_server.exe
 target/<target-triple>/release/textractor_bridge_dll.dll
 ```
 
+## Install to the x86 Textractor Test Folder
+
+The release server serves the browser app from resources embedded in `textractor_bridge_server.exe`. Build the UI before the server, then run the install script:
+
+```powershell
+cd web_ui
+npm run build
+cd ..
+cargo build -p textractor_bridge_server --release
+.\scripts\install-x86.ps1
+```
+
+The clean live layout is:
+
+```text
+C:\Users\ald\Documents\x86\textractor_bridge_server.exe
+```
+
 ## Run
 
 ```powershell
@@ -62,6 +80,12 @@ Default UI:
 
 ```text
 http://127.0.0.1:7788
+```
+
+For frontend development, set `TEXTRACTOR_MEDIA_BRIDGE_WEB_UI` to a built UI directory to serve files from disk instead of the embedded bundle:
+
+```powershell
+$env:TEXTRACTOR_MEDIA_BRIDGE_WEB_UI = "C:\path\to\web_ui\dist"
 ```
 
 The DLL computes a per-user pipe name using the current Windows SID. If the server is not running, the DLL worker tries to start `textractor_bridge_server.exe`; set this environment variable if the executable is not next to Textractor or on `PATH`:
@@ -94,7 +118,7 @@ The browser talks directly to AnkiConnect, defaulting to:
 http://127.0.0.1:8765
 ```
 
-Default mode updates the most recently created note in the configured deck/model. The UI can also create a new note. Media assets are base64 fetched from the Rust server and attached through AnkiConnect `picture`/`audio` fields. Mining audio is prepared as MP3 with FFmpeg; set `mining.ffmpeg_path`, place `ffmpeg.exe` next to the server, or keep `ffmpeg` on `PATH`.
+The UI updates the most recently created note in the configured deck/model. Media assets are base64 fetched from the Rust server and attached through AnkiConnect `picture`/`audio` fields. Mining audio is prepared as MP3 with FFmpeg; set `mining.ffmpeg_path`, place `ffmpeg.exe` next to the server, or keep `ffmpeg` on `PATH`.
 
 ## Tests
 
@@ -112,13 +136,13 @@ Current test coverage includes pipe framing, Textractor `SentenceInfo` parsing/f
 
 This project is licensed under GPL-3.0-only. See `LICENSE`.
 
-Binary distributions may include FFmpeg as a separate GPLv3 executable for MP3 preparation. See `THIRD_PARTY_NOTICES.md`.
+Binary distributions may include FFmpeg as a separate GPLv3 executable for MP3 preparation.
 
 ## Current Limitations
 
 This repository implements the architecture and a functional text/history/SSE/Vue UI/mining path. The advanced Windows media backends are intentionally isolated behind traits, but not all production capture paths are complete yet:
 
 - Screenshot capture defaults to Windows Graphics Capture with Win32 GDI fallback. True DXGI desktop-duplication crop is not implemented.
-- WASAPI process-loopback audio capture is implemented, with system loopback fallback when process loopback is unavailable. Line sessions finalize on manual finish, trailing silence, no-speech timeout, or max duration, then trim silence from the captured WAV.
+- WASAPI process-loopback audio capture is implemented, with system loopback fallback when process loopback is unavailable. Line sessions finalize on manual finish, trailing silence, no-speech timeout, max duration, or the next line arriving. New captures store a ready WAV trimmed from line-start audio plus a wider trim-source WAV that begins one second before the line; the UI can crop anywhere within that source range.
 - Mining prepares MP3 audio through FFmpeg. When multiple selected lines have ready audio, they are concatenated in transcript order and encoded as a single MP3.
 - Named pipe security uses Tokio's named pipe creation path and does not yet install a custom current-user/admins/SYSTEM security descriptor.

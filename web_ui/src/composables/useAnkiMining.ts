@@ -2,7 +2,6 @@ import { computed, ref, watch, type ComputedRef, type Ref } from 'vue';
 
 import { getAssetBase64, prepareMine } from '@/api/bridge';
 import {
-  addNote,
   getLatestNote,
   guiBrowse,
   requestPermission,
@@ -47,7 +46,6 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
       () => options.settings.value.anki.modelName,
       () => options.settings.value.anki.frontField,
       () => options.settings.value.anki.maxLatestCardAgeMinutes,
-      () => options.settings.value.anki.mode,
     ],
     () => {
       void updateTargetCardPreview();
@@ -78,10 +76,7 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
     try {
       await requestPermission(options.settings.value.anki.endpoint);
       const prepared = await prepareSelection();
-      const noteId =
-        options.settings.value.anki.mode === 'create_new'
-          ? await createNewNote(prepared)
-          : await updateLatestNote(prepared);
+      const noteId = await updateLatestNote(prepared);
 
       options.toast.success(`Added ${prepared.lineIds.length} line(s) to Anki.`, {
         action: {
@@ -123,12 +118,6 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
     const requestId = ++previewRequestId;
     if (options.selectedLineCount.value === 0 || !ankiConfigured.value) {
       targetCardPreview.value = null;
-      loadingTargetCard.value = false;
-      return;
-    }
-
-    if (options.settings.value.anki.mode === 'create_new') {
-      targetCardPreview.value = 'Create new Lapis note';
       loadingTargetCard.value = false;
       return;
     }
@@ -175,9 +164,6 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
       modelName: anki.modelName,
     });
     if (!note || latestNoteTooOld(note, anki.maxLatestCardAgeMinutes)) {
-      if (anki.fallbackCreateNote) {
-        return createNewNote(prepared);
-      }
       throw new Error('No recent Anki note found.');
     }
 
@@ -190,35 +176,18 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
     return note.noteId;
   }
 
-  async function createNewNote(prepared: MinePrepareResponse): Promise<number> {
-    const anki = options.settings.value.anki;
-    const fields = await buildFields(prepared, null);
-    if (anki.sentenceField) {
-      fields[anki.sentenceField] = prepared.sentence;
-    }
-    if (anki.sourceField) {
-      fields[anki.sourceField] = prepared.source;
-    }
-
-    return addNote(anki.endpoint, {
-      deckName: anki.deckName,
-      modelName: anki.modelName,
-      fields,
-      tags: anki.tags,
-    });
-  }
-
   async function buildFields(
     prepared: MinePrepareResponse,
-    note: NoteInfo | null,
+    note: NoteInfo,
   ): Promise<Record<string, string>> {
     const anki = options.settings.value.anki;
     const fields: Record<string, string> = {};
 
     if (anki.sentenceField) {
-      fields[anki.sentenceField] = note
-        ? preserveHtmlTags(noteFieldValue(note, anki.sentenceField), prepared.sentence)
-        : prepared.sentence;
+      fields[anki.sentenceField] = preserveHtmlTags(
+        noteFieldValue(note, anki.sentenceField),
+        prepared.sentence,
+      );
     }
 
     if (anki.sourceField) {
@@ -263,8 +232,8 @@ function latestNoteTooOld(note: NoteInfo, maxAgeMinutes: number): boolean {
   return maxAgeMinutes > 0 && Date.now() - note.noteId > maxAgeMinutes * 60_000;
 }
 
-function noteFieldValue(note: NoteInfo | null, fieldName: string): string {
-  return note?.fields[fieldName]?.value ?? '';
+function noteFieldValue(note: NoteInfo, fieldName: string): string {
+  return note.fields[fieldName]?.value ?? '';
 }
 
 function buildTargetCardPreview(note: NoteInfo, frontField: string): string {

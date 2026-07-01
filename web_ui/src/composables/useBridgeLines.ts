@@ -2,13 +2,14 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 
 import {
   finishAudio,
+  finishTrimAudio,
   getConfig,
   getLines,
   loadSessionToken,
   openEventSource,
   parseBrowserEvent,
 } from '@/api/bridge';
-import type { LineId, LinePatch, LineRecord, PublicConfig } from '@/api/types';
+import type { AudioState, LineId, LinePatch, LineRecord, PublicConfig } from '@/api/types';
 import type { ToastApi } from '@/composables/useToast';
 
 export type LiveStatus = 'starting' | 'loading' | 'live' | 'reconnecting' | 'error';
@@ -70,6 +71,15 @@ export function useBridgeLines(toast: ToastApi) {
 
   async function finishLineAudio(lineId: LineId): Promise<void> {
     const audio = await finishAudio(token.value, lineId);
+    patchLine(lineId, { audio });
+  }
+
+  async function finishLineTrimAudio(lineId: LineId): Promise<void> {
+    const audio = await finishTrimAudio(token.value, lineId);
+    patchLine(lineId, { audio });
+  }
+
+  function updateLineAudio(lineId: LineId, audio: AudioState | null): void {
     patchLine(lineId, { audio });
   }
 
@@ -166,6 +176,8 @@ export function useBridgeLines(toast: ToastApi) {
     reloadLines,
     loadOlder,
     finishLineAudio,
+    finishLineTrimAudio,
+    updateLineAudio,
   };
 }
 

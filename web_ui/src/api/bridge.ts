@@ -1,6 +1,9 @@
 import type {
   AssetBase64Response,
+  AudioConfig,
   AudioState,
+  AudioTrimInfoResponse,
+  AudioTrimRequest,
   BrowserEventPayload,
   LineHistoryPage,
   LineId,
@@ -42,6 +45,18 @@ export async function getConfig(token: string): Promise<PublicConfig> {
   return config;
 }
 
+export async function updateAudioConfig(
+  token: string,
+  audioConfig: AudioConfig,
+): Promise<PublicConfig> {
+  const config = await apiJson<PublicConfig>('/api/config/audio', token, {
+    method: 'POST',
+    body: JSON.stringify(audioConfig),
+  });
+  saveSessionToken(config.sessionToken);
+  return config;
+}
+
 export async function getLines(
   token: string,
   query: { limit?: number; beforeSeq?: number; afterSeq?: number } = {},
@@ -64,6 +79,38 @@ export async function getLines(
 export async function finishAudio(token: string, lineId: LineId): Promise<AudioState | null> {
   const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
     `/api/lines/${lineId}/audio/finish`,
+    token,
+    { method: 'POST' },
+  );
+  return response.audio ?? null;
+}
+
+export async function getAudioTrimInfo(
+  token: string,
+  lineId: LineId,
+): Promise<AudioTrimInfoResponse> {
+  return apiJson<AudioTrimInfoResponse>(`/api/lines/${lineId}/audio/trim`, token);
+}
+
+export async function applyAudioTrim(
+  token: string,
+  lineId: LineId,
+  request: AudioTrimRequest,
+): Promise<AudioState | null> {
+  const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
+    `/api/lines/${lineId}/audio/trim`,
+    token,
+    {
+      method: 'POST',
+      body: JSON.stringify(request),
+    },
+  );
+  return response.audio ?? null;
+}
+
+export async function finishTrimAudio(token: string, lineId: LineId): Promise<AudioState | null> {
+  const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
+    `/api/lines/${lineId}/audio/trim/finish`,
     token,
     { method: 'POST' },
   );

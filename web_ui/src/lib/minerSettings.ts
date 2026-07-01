@@ -1,4 +1,4 @@
-import type { MiningMode, RangeScreenshotPick } from '@/api/types';
+import type { RangeScreenshotPick } from '@/api/types';
 
 export interface AnkiSettings {
   endpoint: string;
@@ -11,8 +11,6 @@ export interface AnkiSettings {
   imageField: string;
   sourceField: string;
   maxLatestCardAgeMinutes: number;
-  fallbackCreateNote: boolean;
-  mode: MiningMode;
   rangeSentenceSeparator: string;
   rangeScreenshotPick: RangeScreenshotPick;
   tags: string[];
@@ -34,8 +32,6 @@ export const defaultMinerSettings: MinerSettings = {
     imageField: 'Picture',
     sourceField: 'Source',
     maxLatestCardAgeMinutes: 5,
-    fallbackCreateNote: false,
-    mode: 'update_latest',
     rangeSentenceSeparator: ' ',
     rangeScreenshotPick: 'last',
     tags: ['textractor', 'mined'],
@@ -48,7 +44,9 @@ export function loadMinerSettings(): MinerSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      return mergeSettings(JSON.parse(raw) as Partial<MinerSettings>);
+      const merged = mergeSettings(JSON.parse(raw) as Partial<MinerSettings>);
+      saveMinerSettings(merged);
+      return merged;
     }
   } catch {
     localStorage.removeItem(STORAGE_KEY);
@@ -70,10 +68,26 @@ export function settingsFromServer(serverSettings: Partial<AnkiSettings>): Miner
 }
 
 function mergeSettings(settings: { anki?: Partial<AnkiSettings> }): MinerSettings {
+  const anki = {
+    ...defaultMinerSettings.anki,
+    ...settings.anki,
+  };
+
   return {
     anki: {
-      ...defaultMinerSettings.anki,
-      ...settings.anki,
+      endpoint: anki.endpoint,
+      deckName: anki.deckName,
+      modelName: anki.modelName,
+      frontField: anki.frontField,
+      sentenceField: anki.sentenceField,
+      notesField: anki.notesField,
+      audioField: anki.audioField,
+      imageField: anki.imageField,
+      sourceField: anki.sourceField,
+      maxLatestCardAgeMinutes: anki.maxLatestCardAgeMinutes,
+      rangeSentenceSeparator: anki.rangeSentenceSeparator,
+      rangeScreenshotPick: anki.rangeScreenshotPick,
+      tags: anki.tags,
     },
   };
 }

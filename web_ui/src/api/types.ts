@@ -28,10 +28,39 @@ export interface AssetInfo {
 export type AudioEndReason =
   'manual' | 'silence' | 'no_speech_timeout' | 'max_duration' | 'backend_unavailable';
 
+export interface AudioTrimSource {
+  asset: AssetInfo;
+  sourceDurationMs: number;
+  startMs: number;
+  endMs: number;
+  canExtend: boolean;
+}
+
 export type AudioState =
   | { status: 'recording'; startedUnixMs: number }
-  | { status: 'ready'; asset: AssetInfo; durationMs: number; endReason: AudioEndReason }
+  | {
+      status: 'ready';
+      asset: AssetInfo;
+      durationMs: number;
+      endReason: AudioEndReason;
+      trimSource?: AudioTrimSource | null;
+      trimRecordingStartedUnixMs?: number | null;
+    }
   | { status: 'no_audio'; reason?: string };
+
+export interface AudioTrimInfoResponse {
+  lineId: LineId;
+  source: AssetInfo;
+  sourceDurationMs: number;
+  startMs: number;
+  endMs: number;
+  canExtend: boolean;
+}
+
+export interface AudioTrimRequest {
+  startMs: number;
+  endMs: number;
+}
 
 export interface LineRecord {
   lineId: LineId;
@@ -66,6 +95,7 @@ export interface AppConfig {
     lan_mode: boolean;
     session_token_required: boolean;
   };
+  audio: AudioConfig;
   anki: {
     endpoint: string;
     mode: MiningMode;
@@ -85,6 +115,24 @@ export interface AppConfig {
   };
 }
 
+export interface AudioConfig {
+  backend: string;
+  vad: string;
+  format: string;
+  ready_preroll_ms: number;
+  trailing_silence_ms: number;
+  no_speech_timeout_ms: number;
+  trim_source_preroll_ms: number;
+  trim_trailing_silence_ms: number;
+  trim_no_speech_timeout_ms: number;
+  activity_threshold: number;
+  min_activity_ms: number;
+  trim_activity_threshold: number;
+  trim_min_activity_ms: number;
+  trim_padding_ms: number;
+  max_duration_ms: number;
+}
+
 export interface PublicConfig {
   protocolVersion: number;
   config: AppConfig;
@@ -95,7 +143,7 @@ export interface PublicConfig {
 }
 
 export type RangeScreenshotPick = 'first' | 'last';
-export type MiningMode = 'update_latest' | 'create_new';
+export type MiningMode = 'update_latest';
 
 export interface MinePrepareRequest {
   lineIds: LineId[];

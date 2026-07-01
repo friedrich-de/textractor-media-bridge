@@ -98,18 +98,6 @@ export async function updateNoteFields(
   });
 }
 
-export async function addNote(
-  endpoint: string,
-  note: {
-    deckName: string;
-    modelName: string;
-    fields: Record<string, string>;
-    tags: string[];
-  },
-): Promise<number> {
-  return invoke<number>(endpoint, 'addNote', { note });
-}
-
 export async function guiBrowse(endpoint: string, query: string): Promise<number[]> {
   return invoke<number[]>(endpoint, 'guiBrowse', { query });
 }

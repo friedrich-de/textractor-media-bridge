@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     let (config, config_path) = AppConfig::load_from_default_locations(args.config)?;
     let bind_addr = config.bind_addr();
-    let state = AppState::load(config)?;
+    let state = AppState::load_with_config_path(config, config_path.clone())?;
 
     info!(
         config = config_path

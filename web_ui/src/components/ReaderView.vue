@@ -44,6 +44,8 @@
       @preview-image="emit('previewImage', $event)"
       @preview-audio="emit('previewAudio', $event)"
       @finish-audio="emit('finishAudio', $event)"
+      @trim-audio="emit('trimAudio', $event)"
+      @finish-trim-audio="emit('finishTrimAudio', $event)"
     />
   </section>
 </template>
@@ -78,6 +80,8 @@ const emit = defineEmits<{
   previewImage: [line: LineRecord];
   previewAudio: [line: LineRecord];
   finishAudio: [line: LineRecord];
+  trimAudio: [line: LineRecord];
+  finishTrimAudio: [line: LineRecord];
 }>();
 
 const transcript = ref<TranscriptHandle | null>(null);

@@ -15,8 +15,17 @@ format = "png"
 backend = "auto"
 vad = "webrtc"
 format = "wav"
-trailing_silence_ms = 1600
+ready_preroll_ms = 1000
+trailing_silence_ms = 3000
 no_speech_timeout_ms = 5000
+trim_source_preroll_ms = 1000
+trim_trailing_silence_ms = 5000
+trim_no_speech_timeout_ms = 8000
+activity_threshold = 300
+min_activity_ms = 30
+trim_activity_threshold = 300
+trim_min_activity_ms = 30
+trim_padding_ms = 1000
 max_duration_ms = 120000
 
 [assets]
@@ -32,10 +41,8 @@ audio_bitrate_kbps = 96
 
 [anki]
 endpoint = "http://127.0.0.1:8765"
-mode = "update_latest"
 max_latest_card_age_minutes = 5
 overwrite_sentence_field = false
-fallback_create_note = false
 range_sentence_separator = " "
 range_screenshot_pick = "last"
 deck_name = "Mining"

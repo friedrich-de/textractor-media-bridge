@@ -42,6 +42,8 @@
       @preview-image="previewLineImage"
       @preview-audio="previewLineAudio"
       @finish-audio="finishAudio"
+      @trim-audio="trimLineAudio"
+      @finish-trim-audio="finishTrimAudio"
     />
 
     <SelectionBar
@@ -63,11 +65,20 @@
     <SettingsModal
       v-if="showSettings"
       :settings="settings"
+      :audio-config="config?.config.audio ?? null"
       @save="saveSettings"
       @cancel="showSettings = false"
     />
 
     <MediaPreviewModal v-if="mediaPreview" :url="mediaPreview.url" @close="mediaPreview = null" />
+
+    <AudioTrimModal
+      v-if="audioTrimLine"
+      :token="token"
+      :line="audioTrimLine"
+      @close="audioTrimLine = null"
+      @saved="handleAudioTrimSaved"
+    />
 
     <ToastStack :toasts="toasts" @dismiss="dismissToast" />
   </main>
@@ -77,8 +88,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { ArrowUp, LocateFixed, Settings } from 'lucide-vue-next';
 
-import { assetUrl } from '@/api/bridge';
-import type { LineRecord } from '@/api/types';
+import { assetUrl, updateAudioConfig } from '@/api/bridge';
+import type { AudioConfig, AudioState, LineId, LineRecord } from '@/api/types';
+import AudioTrimModal from '@/components/AudioTrimModal.vue';
 import MediaPreviewModal from '@/components/MediaPreviewModal.vue';
 import ReaderView from '@/components/ReaderView.vue';
 import SelectionBar from '@/components/SelectionBar.vue';
@@ -100,6 +112,11 @@ type ReaderViewHandle = {
   scrollToLatest: () => void;
 };
 
+type SettingsSavePayload = {
+  settings: MinerSettings;
+  audioConfig: AudioConfig;
+};
+
 const { toasts, toast, dismissToast } = useToast();
 const settings = ref<MinerSettings>(loadMinerSettings());
 const showSettings = ref(false);
@@ -107,9 +124,21 @@ const follow = ref(true);
 const readerView = ref<ReaderViewHandle | null>(null);
 const mediaPreview = ref<{ url: string } | null>(null);
 const audioPreview = ref<HTMLAudioElement | null>(null);
+const audioTrimLine = ref<LineRecord | null>(null);
 
-const { token, lines, loading, status, latestLine, start, reloadLines, finishLineAudio } =
-  useBridgeLines(toast);
+const {
+  token,
+  config,
+  lines,
+  loading,
+  status,
+  latestLine,
+  start,
+  reloadLines,
+  finishLineAudio,
+  finishLineTrimAudio,
+  updateLineAudio,
+} = useBridgeLines(toast);
 
 const currentLines = computed(() => lines.value);
 const { selectedLineIds, selectedLineCount, selectedLines, toggleLineSelection, clearSelection } =
@@ -189,6 +218,32 @@ async function finishAudio(line: LineRecord): Promise<void> {
   }
 }
 
+function trimLineAudio(line: LineRecord): void {
+  if (line.audio?.status !== 'ready') {
+    toast.warning('No audio for this line.');
+    return;
+  }
+  if (line.audio.trimRecordingStartedUnixMs != null) {
+    toast.warning('Trim audio is still recording.');
+    return;
+  }
+  audioTrimLine.value = line;
+}
+
+async function finishTrimAudio(line: LineRecord): Promise<void> {
+  try {
+    await finishLineTrimAudio(line.lineId);
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Unable to finish trim audio.');
+  }
+}
+
+function handleAudioTrimSaved(payload: { lineId: LineId; audio: AudioState | null }): void {
+  updateLineAudio(payload.lineId, payload.audio);
+  audioTrimLine.value = null;
+  toast.success('Audio trim saved.');
+}
+
 async function previewSelectionImage(): Promise<void> {
   try {
     const url = await getSelectionImage();
@@ -227,11 +282,17 @@ async function playAudioPreview(url: string): Promise<void> {
   }
 }
 
-function saveSettings(nextSettings: MinerSettings): void {
-  settings.value = cloneMinerSettings(nextSettings);
+async function saveSettings(payload: SettingsSavePayload): Promise<void> {
+  settings.value = cloneMinerSettings(payload.settings);
   saveMinerSettings(settings.value);
-  resetTargetPreview();
-  showSettings.value = false;
-  toast.success('Mining settings saved.');
+
+  try {
+    config.value = await updateAudioConfig(token.value, payload.audioConfig);
+    resetTargetPreview();
+    showSettings.value = false;
+    toast.success('Settings saved.');
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Unable to save audio settings.');
+  }
 }
 </script>

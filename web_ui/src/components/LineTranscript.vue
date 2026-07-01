@@ -55,6 +55,16 @@
                 <LoaderCircle v-if="line.audio?.status === 'recording'" class="spin" :size="16" />
                 <Volume2 v-else :size="16" />
               </button>
+              <button
+                class="icon-button small"
+                type="button"
+                :disabled="trimButtonDisabled(line)"
+                :aria-label="trimButtonRecording(line) ? 'Finish trim recording' : 'Trim audio'"
+                @click.stop="onTrimClick(line)"
+              >
+                <LoaderCircle v-if="trimButtonRecording(line)" class="spin" :size="16" />
+                <Scissors v-else :size="16" />
+              </button>
             </div>
           </div>
         </div>
@@ -71,6 +81,7 @@ import {
   ClipboardCopy,
   Image as ImageIcon,
   LoaderCircle,
+  Scissors,
   Volume2,
 } from 'lucide-vue-next';
 
@@ -88,6 +99,8 @@ const emit = defineEmits<{
   previewImage: [line: LineRecord];
   previewAudio: [line: LineRecord];
   finishAudio: [line: LineRecord];
+  trimAudio: [line: LineRecord];
+  finishTrimAudio: [line: LineRecord];
 }>();
 
 const transcriptShell = shallowRef<HTMLElement | null>(null);
@@ -112,8 +125,27 @@ function onAudioClick(line: LineRecord): void {
   }
 }
 
+function onTrimClick(line: LineRecord): void {
+  if (trimButtonRecording(line)) {
+    emit('finishTrimAudio', line);
+  } else {
+    emit('trimAudio', line);
+  }
+}
+
 function audioButtonDisabled(line: LineRecord): boolean {
   return line.audio?.status !== 'recording' && line.audio?.status !== 'ready';
+}
+
+function trimButtonRecording(line: LineRecord): boolean {
+  return (
+    line.audio?.status === 'recording' ||
+    (line.audio?.status === 'ready' && line.audio.trimRecordingStartedUnixMs != null)
+  );
+}
+
+function trimButtonDisabled(line: LineRecord): boolean {
+  return !trimButtonRecording(line) && line.audio?.status !== 'ready';
 }
 
 function scrollToTop(): void {

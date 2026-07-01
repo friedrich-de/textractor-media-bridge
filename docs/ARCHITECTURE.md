@@ -35,6 +35,8 @@ GET  /api/config
 GET  /api/events
 GET  /api/lines?limit=&beforeSeq=&afterSeq=&sourceKey=
 POST /api/lines/{line_id}/audio/finish
+GET  /api/lines/{line_id}/audio/trim
+POST /api/lines/{line_id}/audio/trim
 POST /api/mine/prepare
 POST /api/assets/{asset_id}/base64
 GET  /assets/{asset_id}
@@ -65,7 +67,7 @@ The server exposes screenshot and audio backend boundaries matching the specific
 - Process window resolution uses `EnumWindows`, `GetWindowThreadProcessId`, `IsWindowVisible`, DWM cloaking checks, root-owner preference, foreground preference, and largest-window fallback.
 - Screenshot capture uses Windows Graphics Capture for target windows in `auto` mode, validates the first frame, falls back to Win32 GDI `BitBlt` when WGC is unavailable or suspicious, and stores PNG assets.
 - Audio sessions are tracked per line and finalize through manual finish, trailing silence, no-speech timeout, or max duration. WASAPI process loopback captures the target process tree where available, and `auto` falls back to system loopback if process activation fails.
-- VAD trigger logic is implemented and tested independently. The active capture path uses PCM activity thresholds for line finalization and silence trimming before storing WAV assets.
+- VAD trigger logic is implemented and tested independently. The active capture path uses PCM activity thresholds for line finalization and silence trimming. Newly captured lines store both a ready WAV trimmed from line-start audio and a broader trim-source WAV beginning one second before the line; trim edits slice the source WAV server-side and replace the ready WAV while preserving the end reason.
 
 ## LAN Mode
 

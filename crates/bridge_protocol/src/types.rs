@@ -161,17 +161,45 @@ pub struct AssetInfo {
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum AudioState {
     Recording {
+        #[serde(rename = "startedUnixMs", alias = "started_unix_ms")]
         started_unix_ms: i64,
     },
     Ready {
         asset: AssetInfo,
+        #[serde(rename = "durationMs", alias = "duration_ms")]
         duration_ms: u64,
+        #[serde(rename = "endReason", alias = "end_reason")]
         end_reason: AudioEndReason,
+        #[serde(
+            default,
+            rename = "trimSource",
+            alias = "trim_source",
+            skip_serializing_if = "Option::is_none"
+        )]
+        trim_source: Option<AudioTrimSource>,
+        #[serde(
+            default,
+            rename = "trimRecordingStartedUnixMs",
+            alias = "trim_recording_started_unix_ms",
+            skip_serializing_if = "Option::is_none"
+        )]
+        trim_recording_started_unix_ms: Option<i64>,
     },
     NoAudio {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioTrimSource {
+    pub asset: AssetInfo,
+    pub source_duration_ms: u64,
+    pub start_ms: u64,
+    pub end_ms: u64,
+    #[serde(default)]
+    pub can_extend: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -189,6 +217,24 @@ pub enum AudioEndReason {
 pub struct AudioFinishResponse {
     pub line_id: LineId,
     pub audio: Option<AudioState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioTrimRequest {
+    pub start_ms: u64,
+    pub end_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioTrimInfoResponse {
+    pub line_id: LineId,
+    pub source: AssetInfo,
+    pub source_duration_ms: u64,
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub can_extend: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

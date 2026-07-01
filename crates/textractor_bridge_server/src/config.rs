@@ -35,6 +35,10 @@ impl Default for AppConfig {
 }
 
 impl AppConfig {
+    pub fn default_path() -> PathBuf {
+        PathBuf::from("config").join("bridge.toml")
+    }
+
     pub fn load(path: Option<&Path>) -> Result<Self> {
         let Some(path) = path else {
             return Ok(Self::default());
@@ -55,12 +59,23 @@ impl AppConfig {
             return Ok((Self::load(Some(&path))?, Some(path)));
         }
 
-        let local = PathBuf::from("config").join("bridge.toml");
+        let local = Self::default_path();
         if local.exists() {
             return Ok((Self::load(Some(&local))?, Some(local)));
         }
 
         Ok((Self::default(), None))
+    }
+
+    pub fn save_to_path(&self, path: &Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create config directory {}", parent.display())
+            })?;
+        }
+        let text = toml::to_string_pretty(self).context("failed to serialize config")?;
+        std::fs::write(path, text)
+            .with_context(|| format!("failed to write config {}", path.display()))
     }
 
     pub fn bind_addr(&self) -> SocketAddr {
@@ -125,8 +140,17 @@ pub struct AudioConfig {
     pub backend: String,
     pub vad: String,
     pub format: String,
+    pub ready_preroll_ms: u64,
     pub trailing_silence_ms: u64,
     pub no_speech_timeout_ms: u64,
+    pub trim_source_preroll_ms: u64,
+    pub trim_trailing_silence_ms: u64,
+    pub trim_no_speech_timeout_ms: u64,
+    pub activity_threshold: u16,
+    pub min_activity_ms: u64,
+    pub trim_activity_threshold: u16,
+    pub trim_min_activity_ms: u64,
+    pub trim_padding_ms: u64,
     pub max_duration_ms: u64,
 }
 
@@ -136,8 +160,17 @@ impl Default for AudioConfig {
             backend: "auto".to_owned(),
             vad: "webrtc".to_owned(),
             format: "wav".to_owned(),
-            trailing_silence_ms: 1_600,
+            ready_preroll_ms: 1_000,
+            trailing_silence_ms: 3_000,
             no_speech_timeout_ms: 5_000,
+            trim_source_preroll_ms: 1_000,
+            trim_trailing_silence_ms: 5_000,
+            trim_no_speech_timeout_ms: 8_000,
+            activity_threshold: 300,
+            min_activity_ms: 30,
+            trim_activity_threshold: 300,
+            trim_min_activity_ms: 30,
+            trim_padding_ms: 1_000,
             max_duration_ms: 120_000,
         }
     }
