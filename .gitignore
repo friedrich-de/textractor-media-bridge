@@ -24,6 +24,7 @@
 *.tar.gz
 
 # Build outputs and debug symbols
+/dist/
 *.dll
 *.exe
 *.ilk

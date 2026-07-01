@@ -52,6 +52,22 @@ target/release/textractor_bridge_server.exe
 target/<target-triple>/release/textractor_bridge_dll.dll
 ```
 
+## Releases
+
+Tagged GitHub releases build both Textractor architectures:
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow builds the Vue UI, embeds it into the Rust server, builds x64 and x86 binaries, bundles `ffmpeg.exe`, and publishes release zips named:
+
+```text
+textractor-media-bridge-<tag>-x64.zip
+textractor-media-bridge-<tag>-x86.zip
+```
+
 ## Install to the x86 Textractor Test Folder
 
 The release server serves the browser app from resources embedded in `textractor_bridge_server.exe`. Build the UI before the server, then run the install script:

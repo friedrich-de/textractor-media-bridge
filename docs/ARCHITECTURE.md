@@ -25,7 +25,7 @@ UTF-8 JSON payload
 - Process-to-window resolution
 - Screenshot/audio backend boundaries
 
-`web_ui` is a Vite/Vue/TypeScript app modeled after Jellyfin Miner. It loads history through `GET /api/lines`, receives live updates through `EventSource`, presents one Textractor transcript as the source of truth, supports contiguous line selection, and calls AnkiConnect from the browser. The Rust server serves `web_ui/dist` when the UI has been built.
+`web_ui` is a Vite/Vue/TypeScript app modeled after Jellyfin Miner. It loads history through `GET /api/lines`, receives live updates through `EventSource`, presents one Textractor transcript as the source of truth, supports contiguous line selection, and calls AnkiConnect from the browser. Release builds embed `web_ui/dist` into the Rust server; frontend development can still override this with `TEXTRACTOR_MEDIA_BRIDGE_WEB_UI`.
 
 ## HTTP API
 
