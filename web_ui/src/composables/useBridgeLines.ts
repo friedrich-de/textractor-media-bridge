@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue';
 
 import {
+  clearLines as clearServerLines,
   finishAudio,
   finishTrimAudio,
   getConfig,
@@ -65,6 +66,14 @@ export function useBridgeLines(toast: ToastApi) {
     } finally {
       loading.value = false;
     }
+  }
+
+  async function clearLines(): Promise<void> {
+    await clearServerLines(token.value);
+    lines.value = [];
+    newestSeq.value = 0;
+    oldestSeq.value = null;
+    hasMoreOlder.value = false;
   }
 
   async function finishLineAudio(lineId: LineId): Promise<void> {
@@ -173,6 +182,7 @@ export function useBridgeLines(toast: ToastApi) {
     start,
     reloadLines,
     loadOlder,
+    clearLines,
     finishLineAudio,
     finishLineTrimAudio,
     updateLineAudio,

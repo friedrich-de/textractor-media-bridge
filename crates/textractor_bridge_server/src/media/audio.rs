@@ -201,6 +201,10 @@ impl AudioManager {
         self.sessions.lock().contains_key(&line_id)
     }
 
+    pub fn clear_sessions(&self) {
+        self.sessions.lock().clear();
+    }
+
     pub fn line_end_reason(&self, line_id: LineId) -> Option<AudioEndReason> {
         let session = self.sessions.lock().get(&line_id).cloned()?;
         if session.main_finished {

@@ -78,6 +78,10 @@ export async function getLines(
   return apiJson<LineHistoryPage>(`/api/lines${suffix}`, token);
 }
 
+export async function clearLines(token: string): Promise<{ clearedLines: number }> {
+  return apiJson<{ clearedLines: number }>('/api/lines', token, { method: 'DELETE' });
+}
+
 export async function finishAudio(token: string, lineId: LineId): Promise<AudioState | null> {
   const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
     `/api/lines/${lineId}/audio/finish`,

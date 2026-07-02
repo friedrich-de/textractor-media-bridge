@@ -1,13 +1,10 @@
 <template>
-  <aside class="selection-bar" :class="{ inactive: selectedCount === 0 }">
+  <aside class="selection-bar">
     <div class="selection-summary">
-      <template v-if="selectedCount > 0">
-        <span class="selection-count">{{ selectedCount }} selected</span>
-        <span v-if="loadingTarget" class="target-preview">Loading target...</span>
-        <span v-else-if="targetPreview" class="target-preview">{{ targetPreview }}</span>
-        <span v-else-if="ankiConfigured" class="target-preview warning">No recent target</span>
-      </template>
-      <span v-else>Click text rows to mine them.</span>
+      <span class="selection-count">{{ selectedCount }} selected</span>
+      <span v-if="loadingTarget" class="target-preview">Loading target...</span>
+      <span v-else-if="targetPreview" class="target-preview">{{ targetPreview }}</span>
+      <span v-else-if="ankiConfigured" class="target-preview warning">No recent target</span>
     </div>
 
     <div class="selection-actions">
@@ -22,7 +19,7 @@
       <button
         class="icon-button"
         type="button"
-        :disabled="selectedCount === 0 || imageLoading"
+        :disabled="imageLoading"
         aria-label="Preview screenshot"
         @click="emit('requestImage')"
       >
@@ -32,7 +29,7 @@
       <button
         class="icon-button"
         type="button"
-        :disabled="selectedCount === 0 || audioLoading"
+        :disabled="audioLoading"
         aria-label="Preview audio"
         @click="emit('requestAudio')"
       >
@@ -49,13 +46,7 @@
         <Send v-else :size="18" />
         <span>{{ sending ? 'Sending' : 'Add to Anki' }}</span>
       </button>
-      <button
-        class="icon-button"
-        type="button"
-        :disabled="selectedCount === 0"
-        aria-label="Clear selection"
-        @click="emit('clear')"
-      >
+      <button class="icon-button" type="button" aria-label="Clear selection" @click="emit('clear')">
         <X :size="18" />
       </button>
     </div>

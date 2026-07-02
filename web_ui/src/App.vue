@@ -35,7 +35,10 @@
       :status="status"
       :loading="loading"
       :follow="follow"
+      :character-count="characterCount"
+      :clearing-lines="clearingLines"
       @reload="reloadLines"
+      @clear-lines="clearLines"
       @toggle-follow="toggleFollow"
       @toggle-line="toggleLineSelection"
       @copy-line="copyLine"
@@ -47,6 +50,7 @@
     />
 
     <SelectionBar
+      v-if="selectedLineCount > 0"
       :selected-count="selectedLineCount"
       :target-preview="targetCardPreview"
       :loading-target="loadingTargetCard"
@@ -125,6 +129,7 @@ const readerView = ref<ReaderViewHandle | null>(null);
 const mediaPreview = ref<{ url: string } | null>(null);
 const audioPreview = ref<HTMLAudioElement | null>(null);
 const audioTrimLine = ref<LineRecord | null>(null);
+const clearingLines = ref(false);
 
 const {
   token,
@@ -135,12 +140,16 @@ const {
   latestLine,
   start,
   reloadLines,
+  clearLines: clearServerLines,
   finishLineAudio,
   finishLineTrimAudio,
   updateLineAudio,
 } = useBridgeLines(toast);
 
 const currentLines = computed(() => lines.value);
+const characterCount = computed(() =>
+  lines.value.reduce((total, line) => total + Array.from(line.text).length, 0),
+);
 const { selectedLineIds, selectedLineCount, selectedLines, toggleLineSelection, clearSelection } =
   useMiningSelection(currentLines);
 
@@ -207,6 +216,25 @@ function toggleFollow(): void {
   follow.value = !follow.value;
   if (follow.value) {
     readerView.value?.scrollToLatest();
+  }
+}
+
+async function clearLines(): Promise<void> {
+  if (lines.value.length === 0 || clearingLines.value) {
+    return;
+  }
+
+  clearingLines.value = true;
+  try {
+    await clearServerLines();
+    clearSelection();
+    mediaPreview.value = null;
+    audioTrimLine.value = null;
+    resetTargetPreview();
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Unable to clear lines.');
+  } finally {
+    clearingLines.value = false;
   }
 }
 

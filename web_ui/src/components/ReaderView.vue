@@ -28,6 +28,18 @@
           <span>{{ latestLine ? formatTime(latestLine.timestampUnixMs) : '--:--' }}</span>
           <span>/ {{ lines.length }} lines</span>
         </button>
+        <span class="stat-pill">{{ formattedCharacterCount }} chars</span>
+        <button
+          class="secondary-action danger compact-text-action"
+          type="button"
+          :disabled="lines.length === 0 || clearingLines"
+          aria-label="Clear transcript lines"
+          @click="emit('clearLines')"
+        >
+          <LoaderCircle v-if="clearingLines" class="spin" :size="18" />
+          <Trash2 v-else :size="18" />
+          <span>Clear</span>
+        </button>
         <button class="icon-button" type="button" aria-label="Reload lines" @click="emit('reload')">
           <RefreshCw :size="18" />
         </button>
@@ -52,7 +64,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Clock3, Gamepad2, LocateFixed, RefreshCw } from 'lucide-vue-next';
+import { Clock3, Gamepad2, LoaderCircle, LocateFixed, RefreshCw, Trash2 } from 'lucide-vue-next';
 
 import type { LiveStatus } from '@/composables/useBridgeLines';
 import type { LineId, LineRecord } from '@/api/types';
@@ -70,10 +82,13 @@ const props = defineProps<{
   status: LiveStatus;
   loading: boolean;
   follow: boolean;
+  characterCount: number;
+  clearingLines: boolean;
 }>();
 
 const emit = defineEmits<{
   reload: [];
+  clearLines: [];
   toggleFollow: [];
   toggleLine: [lineId: LineId];
   copyLine: [line: LineRecord];
@@ -87,6 +102,9 @@ const emit = defineEmits<{
 const transcript = ref<TranscriptHandle | null>(null);
 
 const gameTitle = computed(() => props.latestLine?.meta.windowTitle?.trim() ?? '');
+const formattedCharacterCount = computed(() =>
+  new Intl.NumberFormat().format(props.characterCount),
+);
 
 watch(
   () => [props.latestLine?.lineId, props.follow] as const,

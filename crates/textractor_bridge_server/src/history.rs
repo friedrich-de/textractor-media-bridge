@@ -22,6 +22,7 @@ pub enum HistoryError {
 enum HistoryOp {
     Upsert { line: LineRecord },
     Purge { line_id: LineId },
+    Clear,
 }
 
 pub struct HistoryStore {
@@ -47,6 +48,9 @@ impl HistoryStore {
                     }
                     HistoryOp::Purge { line_id } => {
                         lines.retain(|_, line| line.line_id != line_id);
+                    }
+                    HistoryOp::Clear => {
+                        lines.clear();
                     }
                 }
             }
@@ -97,6 +101,19 @@ impl HistoryStore {
         };
         if removed {
             self.append(&HistoryOp::Purge { line_id })?;
+        }
+        Ok(removed)
+    }
+
+    pub fn clear(&self) -> Result<usize, HistoryError> {
+        let removed = {
+            let mut lines = self.lines.write();
+            let removed = lines.len();
+            lines.clear();
+            removed
+        };
+        if removed > 0 {
+            self.append(&HistoryOp::Clear)?;
         }
         Ok(removed)
     }
@@ -289,5 +306,20 @@ mod tests {
         );
         assert!(older.has_more_older);
         assert!(older.has_more_newer);
+    }
+
+    #[test]
+    fn clear_removes_lines_and_persists_across_reload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("history.jsonl");
+        let store = HistoryStore::load(path.clone()).unwrap();
+        store.upsert(line(1)).unwrap();
+        store.upsert(line(2)).unwrap();
+
+        assert_eq!(store.clear().unwrap(), 2);
+        assert!(store.all_lines().is_empty());
+
+        let reloaded = HistoryStore::load(path).unwrap();
+        assert!(reloaded.all_lines().is_empty());
     }
 }

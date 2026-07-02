@@ -30,6 +30,11 @@ impl AppState {
         page
     }
 
+    pub fn clear_lines(&self) -> Result<usize> {
+        self.inner.audio.clear_sessions();
+        Ok(self.inner.history.clear()?)
+    }
+
     pub async fn ingest_pipe_line(&self, mut event: PipeLineEvent) -> Result<Option<LineRecord>> {
         if event.protocol_version != PROTOCOL_VERSION || event.event_type != "line" {
             warn!(

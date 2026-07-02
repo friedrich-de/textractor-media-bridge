@@ -128,6 +128,19 @@ select:focus-visible {
   font-weight: 800;
 }
 
+.secondary-action.danger {
+  color: #ffd1ca;
+}
+
+.secondary-action.danger:hover {
+  border-color: rgba(255, 118, 99, 0.52);
+  color: var(--coral);
+}
+
+.compact-text-action {
+  white-space: nowrap;
+}
+
 .secondary-action.ghost {
   background: transparent;
   color: var(--muted);
@@ -220,7 +233,8 @@ select:focus-visible {
   gap: 8px;
 }
 
-.time-pill {
+.time-pill,
+.stat-pill {
   display: inline-flex;
   min-height: 38px;
   align-items: center;
@@ -230,9 +244,12 @@ select:focus-visible {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
   color: var(--muted);
-  cursor: pointer;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.time-pill {
+  cursor: pointer;
 }
 
 .time-pill:hover {
@@ -353,10 +370,6 @@ select:focus-visible {
   border-top: 1px solid var(--line-soft);
   background: rgba(15, 17, 19, 0.96);
   backdrop-filter: blur(16px);
-}
-
-.selection-bar.inactive {
-  color: var(--subtle);
 }
 
 .selection-summary {

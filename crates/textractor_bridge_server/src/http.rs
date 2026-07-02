@@ -55,12 +55,18 @@ struct Health {
     newest_seq: Option<u64>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClearLinesResponse {
+    cleared_lines: usize,
+}
+
 pub fn router(state: AppState) -> Router {
     let protected = Router::new()
         .route("/api/config", get(config))
         .route("/api/config/audio", post(update_audio_config))
         .route("/api/events", get(events))
-        .route("/api/lines", get(lines))
+        .route("/api/lines", get(lines).delete(clear_lines))
         .route("/api/lines/{line_id}/audio/finish", post(finish_audio))
         .route(
             "/api/lines/{line_id}/audio/trim/finish",
@@ -135,6 +141,11 @@ async fn lines(
         query.after_seq,
         query.source_key.as_deref(),
     ))
+}
+
+async fn clear_lines(State(state): State<AppState>) -> Result<Json<ClearLinesResponse>, ApiError> {
+    let cleared_lines = state.clear_lines().map_err(ApiError::bad_request)?;
+    Ok(Json(ClearLinesResponse { cleared_lines }))
 }
 
 async fn events(
