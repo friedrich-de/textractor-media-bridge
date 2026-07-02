@@ -138,13 +138,11 @@ text number != 1
 
 ## Anki Mining
 
-The browser talks directly to AnkiConnect, defaulting to the current page host on LAN and to localhost on the PC:
+The browser talks directly to AnkiConnect/Yomitan on the device running the frontend, defaulting to:
 
 ```text
 http://127.0.0.1:8765
 ```
-
-When using the UI from a phone, AnkiConnect must also be reachable from that phone, for example at `http://<PC-LAN-IP>:8765`.
 
 The UI updates the most recently created note in the configured deck/model. Media assets are base64 fetched from the Rust server and attached through AnkiConnect `picture`/`audio` fields. Mining audio is prepared as MP3 with FFmpeg; set `mining.ffmpeg_path`, place `ffmpeg.exe` next to the server, or keep `ffmpeg` on `PATH`.
 

@@ -18,9 +18,11 @@ export interface MinerSettings {
   anki: AnkiSettings;
 }
 
+const DEFAULT_ANKI_ENDPOINT = 'http://127.0.0.1:8765';
+
 export const defaultMinerSettings: MinerSettings = {
   anki: {
-    endpoint: defaultAnkiEndpoint(),
+    endpoint: DEFAULT_ANKI_ENDPOINT,
     deckName: 'Mining',
     modelName: 'Lapis',
     frontField: 'Expression',
@@ -67,7 +69,7 @@ function mergeSettings(settings: { anki?: Partial<AnkiSettings> }): MinerSetting
 
   return {
     anki: {
-      endpoint: anki.endpoint,
+      endpoint: normalizeAnkiEndpoint(anki.endpoint),
       deckName: anki.deckName,
       modelName: anki.modelName,
       frontField: anki.frontField,
@@ -82,10 +84,14 @@ function mergeSettings(settings: { anki?: Partial<AnkiSettings> }): MinerSetting
   };
 }
 
-function defaultAnkiEndpoint(): string {
+function normalizeAnkiEndpoint(endpoint: string): string {
+  return endpoint === oldPageHostEndpoint() ? DEFAULT_ANKI_ENDPOINT : endpoint;
+}
+
+function oldPageHostEndpoint(): string | null {
   const host = window.location.hostname;
   if (host && host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {
     return `http://${host}:8765`;
   }
-  return 'http://127.0.0.1:8765';
+  return null;
 }
