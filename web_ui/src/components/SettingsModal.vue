@@ -274,7 +274,7 @@
 import { computed, reactive, ref } from 'vue';
 import { LoaderCircle, PlugZap, RefreshCw, RotateCcw, X } from 'lucide-vue-next';
 
-import { getModelsWithFields, getVersion } from '@/api/ankiConnect';
+import { getModelsWithFields } from '@/api/ankiConnect';
 import type { AudioConfig } from '@/api/types';
 import {
   cloneAudioConfig,
@@ -309,7 +309,6 @@ const localAudioConfig = reactive<AudioConfig>(
 );
 const connectionStatus = ref<ConnectionStatus>('untested');
 const connectionError = ref<string | null>(null);
-const ankiVersion = ref<number | null>(null);
 const modelsWithFields = ref<Record<string, string[]>>({});
 
 const modelNames = computed(() => Object.keys(modelsWithFields.value).sort());
@@ -327,7 +326,7 @@ const availableFields = computed(() => {
 });
 const connectionLabel = computed(() => {
   if (connectionStatus.value === 'connected') {
-    return `Connected to AnkiConnect v${ankiVersion.value}`;
+    return 'Connected to AnkiConnect';
   }
 
   if (connectionStatus.value === 'error') {
@@ -345,9 +344,8 @@ async function testConnection(): Promise<void> {
   connectionStatus.value = 'testing';
   connectionError.value = null;
   try {
-    ankiVersion.value = await getVersion(localSettings.anki.endpoint);
-    connectionStatus.value = 'connected';
     await loadModels();
+    connectionStatus.value = 'connected';
   } catch (error) {
     connectionStatus.value = 'error';
     connectionError.value = error instanceof Error ? error.message : 'Unable to connect';

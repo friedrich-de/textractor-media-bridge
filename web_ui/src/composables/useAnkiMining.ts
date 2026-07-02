@@ -4,7 +4,6 @@ import { getAssetBase64, prepareMine } from '@/api/bridge';
 import {
   getLatestNote,
   guiBrowse,
-  requestPermission,
   storeMediaFile,
   updateNoteFields,
   type NoteInfo,
@@ -74,7 +73,6 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
 
     sendingToAnki.value = true;
     try {
-      await requestPermission(options.settings.value.anki.endpoint);
       const prepared = await prepareSelection();
       const noteId = await updateLatestNote(prepared);
 

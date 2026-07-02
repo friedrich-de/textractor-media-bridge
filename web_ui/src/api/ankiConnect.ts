@@ -39,14 +39,6 @@ export class AnkiConnectError extends Error {
   }
 }
 
-export async function requestPermission(endpoint: string): Promise<unknown> {
-  return invoke(endpoint, 'requestPermission');
-}
-
-export async function getVersion(endpoint: string): Promise<number> {
-  return invoke<number>(endpoint, 'version');
-}
-
 export async function getModelsWithFields(endpoint: string): Promise<Record<string, string[]>> {
   const modelNames = await invoke<string[]>(endpoint, 'modelNames');
   const actions = modelNames.map((modelName) => ({
@@ -104,13 +96,24 @@ export async function guiBrowse(endpoint: string, query: string): Promise<number
 
 function buildNoteQuery(deckName: string, modelName: string, searchDays: number): string {
   const parts = [`added:${Math.max(1, Math.floor(searchDays))}`];
-  if (deckName.trim()) {
-    parts.unshift(`deck:"${deckName.trim()}"`);
+  const deckQuery = searchQualifier('deck', deckName);
+  if (deckQuery) {
+    parts.unshift(deckQuery);
   }
-  if (modelName.trim()) {
-    parts.unshift(`note:"${modelName.trim()}"`);
+  const modelQuery = searchQualifier('note', modelName);
+  if (modelQuery) {
+    parts.unshift(modelQuery);
   }
   return parts.join(' ');
+}
+
+function searchQualifier(name: string, value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return /^[^\s"]+$/.test(trimmed) ? `${name}:${trimmed}` : `${name}:"${trimmed}"`;
 }
 
 async function invoke<T>(endpoint: string, action: string, params?: JsonValue): Promise<T> {
