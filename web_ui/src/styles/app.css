@@ -200,6 +200,7 @@ select:focus-visible {
 
 .reader-toolbar {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -229,13 +230,17 @@ select:focus-visible {
 
 .toolbar-cluster {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
 .time-pill,
 .stat-pill {
   display: inline-flex;
+  max-width: 100%;
   min-height: 38px;
   align-items: center;
   gap: 7px;
@@ -805,7 +810,7 @@ select:focus-visible {
 
   .toolbar-cluster {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
   .game-title {
@@ -844,7 +849,13 @@ select:focus-visible {
 }
 
 @media (max-width: 520px) {
+  .toolbar-cluster > .secondary-action,
+  .toolbar-cluster > .stat-pill {
+    flex: 1 1 calc(50% - 4px);
+  }
+
   .time-pill {
+    flex: 1 1 100%;
     width: 100%;
     justify-content: center;
   }

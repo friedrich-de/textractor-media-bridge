@@ -151,7 +151,8 @@ fn platform_bootstrap_server() {
     use std::{
         ffi::OsStr,
         os::windows::{ffi::OsStrExt, process::CommandExt},
-        process::Command,
+        path::{Path, PathBuf},
+        process::{Command, Stdio},
         ptr,
     };
     use windows_sys::Win32::{
@@ -174,17 +175,128 @@ fn platform_bootstrap_server() {
             return;
         }
 
-        let exe = std::env::var_os("TEXTRACTOR_MEDIA_BRIDGE_SERVER_EXE")
-            .unwrap_or_else(|| "textractor_bridge_server.exe".into());
-        let _ = Command::new(exe)
-            .arg("--open")
-            .creation_flags(CREATE_NO_WINDOW)
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn();
+        let exe = server_exe_path();
+        let server_dir = exe.parent().map(Path::to_path_buf);
+        let config = server_dir
+            .as_ref()
+            .map(|dir| dir.join("config").join("bridge.toml"))
+            .filter(|path| path.is_file());
+
+        if !spawn_server_via_clean_cmd(&exe, server_dir.as_deref(), config.as_deref()) {
+            let mut command = Command::new(&exe);
+            if let Some(dir) = server_dir.as_deref() {
+                command.current_dir(dir);
+            }
+            if let Some(config) = config.as_deref() {
+                command.arg("--config").arg(config);
+            }
+            let _ = command
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdin(Stdio::null())
+                .stdout(log_stdio(
+                    server_dir.as_deref(),
+                    "textractor_bridge_server.autostart.stdout.log",
+                ))
+                .stderr(log_stdio(
+                    server_dir.as_deref(),
+                    "textractor_bridge_server.autostart.stderr.log",
+                ))
+                .spawn();
+        }
 
         let _ = CloseHandle(mutex);
+    }
+
+    fn server_exe_path() -> PathBuf {
+        if let Some(path) = std::env::var_os("TEXTRACTOR_MEDIA_BRIDGE_SERVER_EXE") {
+            let path = PathBuf::from(path);
+            if path.is_absolute() {
+                return path;
+            }
+            if let Some(dir) = textractor_dir() {
+                return dir.join(path);
+            }
+            return path;
+        }
+
+        textractor_dir()
+            .map(|dir| dir.join("textractor_bridge_server.exe"))
+            .unwrap_or_else(|| PathBuf::from("textractor_bridge_server.exe"))
+    }
+
+    fn textractor_dir() -> Option<PathBuf> {
+        std::env::current_exe()
+            .ok()
+            .and_then(|path| path.parent().map(Path::to_path_buf))
+    }
+
+    fn spawn_server_via_clean_cmd(
+        exe: &Path,
+        server_dir: Option<&Path>,
+        config: Option<&Path>,
+    ) -> bool {
+        let Some(cmd) = clean_cmd_path() else {
+            return false;
+        };
+
+        let stdout =
+            server_dir.map(|dir| dir.join("textractor_bridge_server.autostart.stdout.log"));
+        let stderr =
+            server_dir.map(|dir| dir.join("textractor_bridge_server.autostart.stderr.log"));
+        let mut line = String::from("call ");
+        line.push_str(&cmd_quote(exe));
+        if let Some(config) = config {
+            line.push_str(" --config ");
+            line.push_str(&cmd_quote(config));
+        }
+        if let Some(stdout) = stdout.as_deref() {
+            line.push_str(" > ");
+            line.push_str(&cmd_quote(stdout));
+        }
+        if let Some(stderr) = stderr.as_deref() {
+            line.push_str(" 2> ");
+            line.push_str(&cmd_quote(stderr));
+        }
+
+        let mut command = Command::new(cmd);
+        command.arg("/D").arg("/C").arg(line);
+        if let Some(dir) = server_dir {
+            command.current_dir(dir);
+        }
+        command
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .is_ok()
+    }
+
+    fn clean_cmd_path() -> Option<PathBuf> {
+        let windir = std::env::var_os("WINDIR").map(PathBuf::from)?;
+        let path = if cfg!(target_arch = "x86") {
+            windir.join("Sysnative").join("cmd.exe")
+        } else {
+            windir.join("System32").join("cmd.exe")
+        };
+        Some(path)
+    }
+
+    fn cmd_quote(path: &Path) -> String {
+        format!("\"{}\"", path.display())
+    }
+
+    fn log_stdio(server_dir: Option<&Path>, name: &str) -> Stdio {
+        server_dir
+            .and_then(|dir| {
+                OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(dir.join(name))
+                    .ok()
+            })
+            .map(Stdio::from)
+            .unwrap_or_else(Stdio::null)
     }
 }
 
