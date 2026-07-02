@@ -5,6 +5,7 @@ use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
 use sentence_info::{parse_sentence_info, ParsedSentenceInfo};
 use std::{
     fs::{File, OpenOptions},
+    io::Write,
     panic::{catch_unwind, AssertUnwindSafe},
     sync::{
         atomic::{AtomicI64, AtomicU64, Ordering},
@@ -160,6 +161,37 @@ fn platform_bootstrap_server() {
         System::Threading::{CreateMutexW, CREATE_NO_WINDOW},
     };
 
+    let exe = server_exe_path();
+    let server_dir = exe.parent().map(Path::to_path_buf);
+    let config = server_dir
+        .as_ref()
+        .map(|dir| dir.join("config").join("bridge.toml"))
+        .filter(|path| path.is_file());
+    let cmd = clean_cmd_path();
+
+    append_bootstrap_log(
+        server_dir.as_deref(),
+        &format!(
+            "bootstrap requested; current_exe={}; current_dir={}; server_exe={}; server_exists={}; config={}; cmd={}; cmd_exists={}",
+            std::env::current_exe()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|error| format!("<error: {error}>")),
+            std::env::current_dir()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|error| format!("<error: {error}>")),
+            exe.display(),
+            exe.is_file(),
+            config
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "<none>".to_owned()),
+            cmd.as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "<none>".to_owned()),
+            cmd.as_ref().map(|path| path.is_file()).unwrap_or(false),
+        ),
+    );
+
     let mutex_name: Vec<u16> = OsStr::new("Local\\TextractorMediaBridgeServerBootstrap_v1")
         .encode_wide()
         .chain(std::iter::once(0))
@@ -168,21 +200,31 @@ fn platform_bootstrap_server() {
     unsafe {
         let mutex = CreateMutexW(ptr::null(), 0, mutex_name.as_ptr());
         if mutex.is_null() {
+            append_bootstrap_log(
+                server_dir.as_deref(),
+                &format!("CreateMutexW failed; error={}", GetLastError()),
+            );
             return;
         }
         if GetLastError() == ERROR_ALREADY_EXISTS {
+            append_bootstrap_log(
+                server_dir.as_deref(),
+                "bootstrap mutex already exists; skipping",
+            );
             let _ = CloseHandle(mutex);
             return;
         }
 
-        let exe = server_exe_path();
-        let server_dir = exe.parent().map(Path::to_path_buf);
-        let config = server_dir
-            .as_ref()
-            .map(|dir| dir.join("config").join("bridge.toml"))
-            .filter(|path| path.is_file());
-
-        if !spawn_server_via_clean_cmd(&exe, server_dir.as_deref(), config.as_deref()) {
+        if let Err(error) = spawn_server_via_clean_cmd(
+            cmd.as_deref(),
+            &exe,
+            server_dir.as_deref(),
+            config.as_deref(),
+        ) {
+            append_bootstrap_log(
+                server_dir.as_deref(),
+                &format!("clean cmd launcher failed: {error}; trying direct spawn"),
+            );
             let mut command = Command::new(&exe);
             if let Some(dir) = server_dir.as_deref() {
                 command.current_dir(dir);
@@ -190,7 +232,7 @@ fn platform_bootstrap_server() {
             if let Some(config) = config.as_deref() {
                 command.arg("--config").arg(config);
             }
-            let _ = command
+            let result = command
                 .creation_flags(CREATE_NO_WINDOW)
                 .stdin(Stdio::null())
                 .stdout(log_stdio(
@@ -202,6 +244,22 @@ fn platform_bootstrap_server() {
                     "textractor_bridge_server.autostart.stderr.log",
                 ))
                 .spawn();
+            match result {
+                Ok(child) => append_bootstrap_log(
+                    server_dir.as_deref(),
+                    &format!("spawned server directly; pid={}", child.id()),
+                ),
+                Err(error) => append_bootstrap_log(
+                    server_dir.as_deref(),
+                    &format!(
+                        "direct server spawn failed; error={}; raw_os_error={:?}",
+                        error,
+                        error.raw_os_error()
+                    ),
+                ),
+            }
+        } else {
+            append_bootstrap_log(server_dir.as_deref(), "spawned clean cmd launcher");
         }
 
         let _ = CloseHandle(mutex);
@@ -231,12 +289,16 @@ fn platform_bootstrap_server() {
     }
 
     fn spawn_server_via_clean_cmd(
+        cmd: Option<&Path>,
         exe: &Path,
         server_dir: Option<&Path>,
         config: Option<&Path>,
-    ) -> bool {
-        let Some(cmd) = clean_cmd_path() else {
-            return false;
+    ) -> Result<u32, String> {
+        let Some(cmd) = cmd else {
+            return Err("WINDIR was unavailable".to_owned());
+        };
+        if !cmd.is_file() {
+            return Err(format!("cmd launcher was not found: {}", cmd.display()));
         };
 
         let stdout =
@@ -259,7 +321,7 @@ fn platform_bootstrap_server() {
         }
 
         let mut command = Command::new(cmd);
-        command.arg("/D").arg("/C").arg(line);
+        command.arg("/D").arg("/C").arg(&line);
         if let Some(dir) = server_dir {
             command.current_dir(dir);
         }
@@ -269,7 +331,15 @@ fn platform_bootstrap_server() {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .is_ok()
+            .map(|child| child.id())
+            .map_err(|error| {
+                format!(
+                    "{}; raw_os_error={:?}; cmd={}; line={line}",
+                    error,
+                    error.raw_os_error(),
+                    cmd.display()
+                )
+            })
     }
 
     fn clean_cmd_path() -> Option<PathBuf> {
@@ -297,6 +367,15 @@ fn platform_bootstrap_server() {
             })
             .map(Stdio::from)
             .unwrap_or_else(Stdio::null)
+    }
+
+    fn append_bootstrap_log(server_dir: Option<&Path>, message: &str) {
+        let path = server_dir
+            .map(|dir| dir.join("textractor_bridge_dll.bootstrap.log"))
+            .unwrap_or_else(|| PathBuf::from("textractor_bridge_dll.bootstrap.log"));
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(file, "[{}] {message}", unix_ms_now());
+        }
     }
 }
 
