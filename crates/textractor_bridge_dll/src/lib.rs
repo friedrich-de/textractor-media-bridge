@@ -301,45 +301,69 @@ fn platform_bootstrap_server() {
             return Err(format!("cmd launcher was not found: {}", cmd.display()));
         };
 
-        let stdout =
-            server_dir.map(|dir| dir.join("textractor_bridge_server.autostart.stdout.log"));
-        let stderr =
-            server_dir.map(|dir| dir.join("textractor_bridge_server.autostart.stderr.log"));
-        let mut line = String::from("call ");
-        line.push_str(&cmd_quote(exe));
-        if let Some(config) = config {
-            line.push_str(" --config ");
-            line.push_str(&cmd_quote(config));
-        }
-        if let Some(stdout) = stdout.as_deref() {
-            line.push_str(" > ");
-            line.push_str(&cmd_quote(stdout));
-        }
-        if let Some(stderr) = stderr.as_deref() {
-            line.push_str(" 2> ");
-            line.push_str(&cmd_quote(stderr));
-        }
+        let script = write_launcher_script(exe, server_dir, config)?;
 
         let mut command = Command::new(cmd);
-        command.arg("/D").arg("/C").arg(&line);
+        command.arg("/D").arg("/C").arg(&script);
         if let Some(dir) = server_dir {
             command.current_dir(dir);
         }
         command
             .creation_flags(CREATE_NO_WINDOW)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stdout(log_stdio(
+                server_dir,
+                "textractor_bridge_server.autostart.stdout.log",
+            ))
+            .stderr(log_stdio(
+                server_dir,
+                "textractor_bridge_server.autostart.stderr.log",
+            ))
             .spawn()
             .map(|child| child.id())
             .map_err(|error| {
                 format!(
-                    "{}; raw_os_error={:?}; cmd={}; line={line}",
+                    "{}; raw_os_error={:?}; cmd={}; script={}",
                     error,
                     error.raw_os_error(),
-                    cmd.display()
+                    cmd.display(),
+                    script.display()
                 )
             })
+    }
+
+    fn write_launcher_script(
+        exe: &Path,
+        server_dir: Option<&Path>,
+        config: Option<&Path>,
+    ) -> Result<PathBuf, String> {
+        let script = server_dir
+            .map(|dir| dir.join("textractor_bridge_server.autostart.cmd"))
+            .unwrap_or_else(|| PathBuf::from("textractor_bridge_server.autostart.cmd"));
+        let mut command = cmd_quote(exe);
+        if let Some(config) = config {
+            command.push_str(" --config ");
+            command.push_str(&cmd_quote(config));
+        }
+        let contents = format!(
+            "@echo off\r\n\
+             echo [bootstrap-wrapper] started %DATE% %TIME%\r\n\
+             echo [bootstrap-wrapper] cd=%CD%\r\n\
+             echo [bootstrap-wrapper] command={command}\r\n\
+             if not exist {exe} echo [bootstrap-wrapper] missing server exe: {exe}\r\n\
+             {command}\r\n\
+             set BRIDGE_EXIT=%ERRORLEVEL%\r\n\
+             echo [bootstrap-wrapper] server exited with %BRIDGE_EXIT%\r\n\
+             exit /b %BRIDGE_EXIT%\r\n",
+            exe = cmd_quote(exe),
+        );
+        std::fs::write(&script, contents).map_err(|error| {
+            format!(
+                "failed to write launcher script {}: {error}",
+                script.display()
+            )
+        })?;
+        Ok(script)
     }
 
     fn clean_cmd_path() -> Option<PathBuf> {
