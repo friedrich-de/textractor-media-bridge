@@ -92,11 +92,21 @@ C:\Users\ald\Documents\x86\textractor_bridge_server.exe
 cargo run -p textractor_bridge_server -- --config config/bridge.example.toml --open
 ```
 
-Default UI:
+Default UI on the PC:
 
 ```text
-http://127.0.0.1:7788
+http://127.0.0.1:7788/
 ```
+
+The server binds to `0.0.0.0:7788` by default so the UI is reachable from the local network. For phone/tablet access, replace `<PC-LAN-IP>` with the Windows machine's LAN address:
+
+```text
+http://<PC-LAN-IP>:7788/
+```
+
+The x86 install script starts the server hidden and writes `textractor_bridge_server.session.json` in the Textractor folder. That file contains the local URL and phone URL template.
+
+The browser app includes a web app manifest and service worker. Full PWA installation from another device normally requires HTTPS; plain HTTP LAN access is useful for testing and browser use, but mobile install prompts may be unavailable unless the page is served through a trusted HTTPS origin.
 
 For frontend development, set `TEXTRACTOR_MEDIA_BRIDGE_WEB_UI` to a built UI directory to serve files from disk instead of the embedded bundle:
 
@@ -128,11 +138,13 @@ text number != 1
 
 ## Anki Mining
 
-The browser talks directly to AnkiConnect, defaulting to:
+The browser talks directly to AnkiConnect, defaulting to the current page host on LAN and to localhost on the PC:
 
 ```text
 http://127.0.0.1:8765
 ```
+
+When using the UI from a phone, AnkiConnect must also be reachable from that phone, for example at `http://<PC-LAN-IP>:8765`.
 
 The UI updates the most recently created note in the configured deck/model. Media assets are base64 fetched from the Rust server and attached through AnkiConnect `picture`/`audio` fields. Mining audio is prepared as MP3 with FFmpeg; set `mining.ffmpeg_path`, place `ffmpeg.exe` next to the server, or keep `ffmpeg` on `PATH`.
 

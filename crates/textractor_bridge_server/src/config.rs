@@ -97,9 +97,9 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            bind: "127.0.0.1:7788".to_owned(),
-            lan_mode: false,
-            session_token_required: true,
+            bind: "0.0.0.0:7788".to_owned(),
+            lan_mode: true,
+            session_token_required: false,
         }
     }
 }
@@ -299,5 +299,14 @@ tags = ["textractor", "mined"]
         }
         assert!(text.contains("range_sentence_separator"));
         assert!(text.contains("audio_bitrate_kbps"));
+    }
+
+    #[test]
+    fn default_config_binds_lan_without_session_token() {
+        let config = AppConfig::default();
+
+        assert_eq!(config.server.bind, "0.0.0.0:7788");
+        assert!(config.server.lan_mode);
+        assert!(!config.server.session_token_required);
     }
 }

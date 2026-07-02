@@ -19,6 +19,9 @@ $BridgeDllPath = Join-Path $InstallRoot "Textractor Media Bridge.xdll"
 $LegacyBridgeDllPath = Join-Path $InstallRoot "Textractor Media Bridge.dll"
 $FfmpegPath = Join-Path $InstallRoot "ffmpeg.exe"
 $WebRoot = Join-Path $InstallRoot "web_ui"
+$ServerStdoutLogPath = Join-Path $InstallRoot "textractor_bridge_server.stdout.log"
+$ServerStderrLogPath = Join-Path $InstallRoot "textractor_bridge_server.stderr.log"
+$ServerSessionPath = Join-Path $InstallRoot "textractor_bridge_server.session.json"
 
 if (-not (Test-Path -LiteralPath $SourceServer -PathType Leaf)) {
     throw "Missing $SourceServer. Run: cargo build -p textractor_bridge_server --release"
@@ -55,6 +58,9 @@ Assert-UnderInstallRoot $BridgeDllPath
 Assert-UnderInstallRoot $LegacyBridgeDllPath
 Assert-UnderInstallRoot $FfmpegPath
 Assert-UnderInstallRoot $WebRoot
+Assert-UnderInstallRoot $ServerStdoutLogPath
+Assert-UnderInstallRoot $ServerStderrLogPath
+Assert-UnderInstallRoot $ServerSessionPath
 
 $ExistingServer = Get-CimInstance Win32_Process |
     Where-Object { $_.ExecutablePath -eq $ServerPath }
@@ -76,7 +82,13 @@ if (Test-Path -LiteralPath $WebRoot) {
 }
 
 if (-not $NoRestart) {
-    Start-Process -FilePath $ServerPath -WorkingDirectory $InstallRoot -WindowStyle Hidden
+    Remove-Item -LiteralPath $ServerStdoutLogPath, $ServerStderrLogPath -Force -ErrorAction SilentlyContinue
+    Start-Process `
+        -FilePath $ServerPath `
+        -WorkingDirectory $InstallRoot `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $ServerStdoutLogPath `
+        -RedirectStandardError $ServerStderrLogPath
     Start-Sleep -Milliseconds 800
 }
 
@@ -86,4 +98,7 @@ Get-Item -LiteralPath $FfmpegPath | Select-Object FullName, Length
 [pscustomobject]@{
     WebUiFolderExists = Test-Path -LiteralPath $WebRoot
     EmbeddedWebUi = $true
+    ServerStdoutLog = $ServerStdoutLogPath
+    ServerStderrLog = $ServerStderrLogPath
+    ServerSessionInfo = $ServerSessionPath
 }

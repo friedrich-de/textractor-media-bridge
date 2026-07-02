@@ -1,7 +1,7 @@
 [server]
-bind = "127.0.0.1:7788"
-lan_mode = false
-session_token_required = true
+bind = "0.0.0.0:7788"
+lan_mode = true
+session_token_required = false
 
 [pipe]
 name = "auto"

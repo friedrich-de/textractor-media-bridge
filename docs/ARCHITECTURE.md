@@ -71,10 +71,14 @@ The server exposes screenshot and audio backend boundaries matching the specific
 
 ## LAN Mode
 
-By default the server binds to `127.0.0.1`. If `lan_mode = true` and `session_token_required = true`, the server generates a token and logs it at startup. Protected API and asset requests accept either:
+By default the server binds to `0.0.0.0:7788` with token protection disabled, so the browser UI and API are reachable from the local network at `http://<PC-LAN-IP>:7788/`.
+
+If `session_token_required = true`, the server generates a token at startup. Protected API and asset requests then accept either:
 
 ```text
 ?token=<token>
 x-session-token: <token>
 Authorization: Bearer <token>
 ```
+
+Local browser launches use `127.0.0.1` even when the bind address is `0.0.0.0`. At startup the server writes `textractor_bridge_server.session.json` in its working directory with the local URL, phone URL template, and token only when token protection is active.

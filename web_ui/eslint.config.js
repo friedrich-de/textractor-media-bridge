@@ -20,6 +20,18 @@ export default [
     },
   },
   {
+    files: ['public/service-worker.js'],
+    languageOptions: {
+      globals: {
+        caches: 'readonly',
+        fetch: 'readonly',
+        Response: 'readonly',
+        self: 'readonly',
+        URL: 'readonly',
+      },
+    },
+  },
+  {
     rules: {
       'vue/multi-word-component-names': 'off',
       'vue/no-v-html': 'off',

@@ -30,9 +30,7 @@ export function useBridgeLines(toast: ToastApi) {
   async function start(): Promise<void> {
     status.value = 'loading';
     config.value = await getConfig(token.value);
-    if (config.value.sessionToken) {
-      token.value = config.value.sessionToken;
-    }
+    token.value = config.value.sessionToken ?? '';
     await reloadLines();
     connectEvents();
   }

@@ -20,7 +20,7 @@ export interface MinerSettings {
 
 export const defaultMinerSettings: MinerSettings = {
   anki: {
-    endpoint: 'http://127.0.0.1:8765',
+    endpoint: defaultAnkiEndpoint(),
     deckName: 'Mining',
     modelName: 'Lapis',
     frontField: 'Expression',
@@ -80,4 +80,12 @@ function mergeSettings(settings: { anki?: Partial<AnkiSettings> }): MinerSetting
       rangeScreenshotPick: anki.rangeScreenshotPick,
     },
   };
+}
+
+function defaultAnkiEndpoint(): string {
+  const host = window.location.hostname;
+  if (host && host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {
+    return `http://${host}:8765`;
+  }
+  return 'http://127.0.0.1:8765';
 }

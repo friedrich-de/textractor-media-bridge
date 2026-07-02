@@ -32,6 +32,8 @@ export function loadSessionToken(): string {
 export function saveSessionToken(token: string | null | undefined): void {
   if (token) {
     localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
   }
 }
 
