@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - "master"
     tags:
       - "v*"
   workflow_dispatch:
@@ -59,6 +61,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }} -p textractor_bridge_server -p textractor_bridge_dll
 
       - name: Download FFmpeg
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           New-Item -ItemType Directory -Path vendor\ffmpeg -Force | Out-Null
           Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile vendor\ffmpeg\ffmpeg-release-essentials.zip
@@ -68,6 +71,7 @@ jobs:
           Copy-Item -LiteralPath $ffmpeg.FullName -Destination vendor\ffmpeg\ffmpeg.exe -Force
 
       - name: Package release asset
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           if ("${{ startsWith(github.ref, 'refs/tags/') }}" -eq "true") {
             $version = "${{ github.ref_name }}"
@@ -81,6 +85,7 @@ jobs:
             -FfmpegPath "vendor\ffmpeg\ffmpeg.exe"
 
       - name: Upload build artifact
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: textractor-media-bridge-${{ matrix.arch }}
