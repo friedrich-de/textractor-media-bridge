@@ -148,10 +148,15 @@ fn maybe_bootstrap_server() {
 
 #[cfg(windows)]
 fn platform_bootstrap_server() {
-    use std::{ffi::OsStr, os::windows::ffi::OsStrExt, process::Command, ptr};
+    use std::{
+        ffi::OsStr,
+        os::windows::{ffi::OsStrExt, process::CommandExt},
+        process::Command,
+        ptr,
+    };
     use windows_sys::Win32::{
         Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS},
-        System::Threading::CreateMutexW,
+        System::Threading::{CreateMutexW, CREATE_NO_WINDOW},
     };
 
     let mutex_name: Vec<u16> = OsStr::new("Local\\TextractorMediaBridgeServerBootstrap_v1")
@@ -173,6 +178,7 @@ fn platform_bootstrap_server() {
             .unwrap_or_else(|| "textractor_bridge_server.exe".into());
         let _ = Command::new(exe)
             .arg("--open")
+            .creation_flags(CREATE_NO_WINDOW)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
