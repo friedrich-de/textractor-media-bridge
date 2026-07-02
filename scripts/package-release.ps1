@@ -51,8 +51,6 @@ $ExtensionName = if ($Arch -eq "x86") { "Textractor Media Bridge.xdll" } else { 
 Copy-Item -LiteralPath $ServerExe -Destination (Join-Path $PackageDir "textractor_bridge_server.exe")
 Copy-Item -LiteralPath $BridgeDll -Destination (Join-Path $PackageDir $ExtensionName)
 Copy-Item -LiteralPath $FfmpegPath -Destination (Join-Path $PackageDir "ffmpeg.exe")
-Copy-Item -LiteralPath (Join-Path $RepoRoot "README.md") -Destination (Join-Path $PackageDir "README.md")
-Copy-Item -LiteralPath (Join-Path $RepoRoot "LICENSE") -Destination (Join-Path $PackageDir "LICENSE")
 
 $ZipPath = Join-Path $ReleaseDir "$PackageName.zip"
 if (Test-Path -LiteralPath $ZipPath) {
