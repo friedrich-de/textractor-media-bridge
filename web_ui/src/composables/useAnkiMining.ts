@@ -84,7 +84,7 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
           },
         },
       });
-      window.setTimeout(options.clearSelection, 1_500);
+      options.clearSelection();
     } catch (error) {
       options.toast.error(error instanceof Error ? error.message : 'Unable to update Anki.');
     } finally {

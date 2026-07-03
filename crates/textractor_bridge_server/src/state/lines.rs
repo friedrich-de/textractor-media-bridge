@@ -78,8 +78,8 @@ impl AppState {
             BrowserEvent::LineAdded(BrowserLineAddedEvent { line: line.clone() }),
         );
 
-        if matches!(line.audio, Some(AudioState::Recording { .. })) {
-            self.spawn_audio_auto_finish(line_id);
+        if let Some(AudioState::Recording { started_unix_ms }) = &line.audio {
+            self.spawn_audio_deadlines(line_id, *started_unix_ms);
         }
         if self.inner.screenshots.enabled() {
             self.spawn_screenshot_capture(line_id, line.meta.process_id);

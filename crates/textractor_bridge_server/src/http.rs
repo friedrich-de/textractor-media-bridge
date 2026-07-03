@@ -7,7 +7,7 @@ use axum::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Response,
     },
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use bridge_protocol::{
@@ -67,6 +67,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/config/audio", post(update_audio_config))
         .route("/api/events", get(events))
         .route("/api/lines", get(lines).delete(clear_lines))
+        .route("/api/lines/{line_id}/audio", delete(remove_audio))
         .route("/api/lines/{line_id}/audio/finish", post(finish_audio))
         .route(
             "/api/lines/{line_id}/audio/trim/finish",
@@ -215,6 +216,18 @@ async fn finish_audio(
     Ok(Json(
         state
             .finish_audio(line_id, AudioEndReason::Manual)
+            .await
+            .map_err(ApiError::bad_request)?,
+    ))
+}
+
+async fn remove_audio(
+    State(state): State<AppState>,
+    Path(line_id): Path<LineId>,
+) -> Result<Json<bridge_protocol::AudioFinishResponse>, ApiError> {
+    Ok(Json(
+        state
+            .remove_audio(line_id)
             .await
             .map_err(ApiError::bad_request)?,
     ))

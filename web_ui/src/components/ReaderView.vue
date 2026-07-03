@@ -58,6 +58,7 @@
       @finish-audio="emit('finishAudio', $event)"
       @trim-audio="emit('trimAudio', $event)"
       @finish-trim-audio="emit('finishTrimAudio', $event)"
+      @remove-audio="emit('removeAudio', $event)"
     />
   </section>
 </template>
@@ -97,6 +98,7 @@ const emit = defineEmits<{
   finishAudio: [line: LineRecord];
   trimAudio: [line: LineRecord];
   finishTrimAudio: [line: LineRecord];
+  removeAudio: [line: LineRecord];
 }>();
 
 const transcript = ref<TranscriptHandle | null>(null);

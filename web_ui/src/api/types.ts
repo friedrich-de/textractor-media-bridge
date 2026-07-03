@@ -26,7 +26,12 @@ export interface AssetInfo {
 }
 
 export type AudioEndReason =
-  'manual' | 'silence' | 'no_speech_timeout' | 'max_duration' | 'backend_unavailable';
+  | 'manual'
+  | 'line_advanced'
+  | 'silence'
+  | 'no_speech_timeout'
+  | 'max_duration'
+  | 'backend_unavailable';
 
 export interface AudioTrimSource {
   asset: AssetInfo;
@@ -104,18 +109,6 @@ export interface AppConfig {
 
 export interface AudioConfig {
   backend: string;
-  ready_preroll_ms: number;
-  trailing_silence_ms: number;
-  no_speech_timeout_ms: number;
-  trim_source_preroll_ms: number;
-  trim_trailing_silence_ms: number;
-  trim_no_speech_timeout_ms: number;
-  activity_threshold: number;
-  min_activity_ms: number;
-  trim_activity_threshold: number;
-  trim_min_activity_ms: number;
-  trim_padding_ms: number;
-  max_duration_ms: number;
 }
 
 export interface PublicConfig {

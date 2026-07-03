@@ -91,6 +91,15 @@ export async function finishAudio(token: string, lineId: LineId): Promise<AudioS
   return response.audio ?? null;
 }
 
+export async function removeAudio(token: string, lineId: LineId): Promise<AudioState | null> {
+  const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
+    `/api/lines/${lineId}/audio`,
+    token,
+    { method: 'DELETE' },
+  );
+  return response.audio ?? null;
+}
+
 export async function getAudioTrimInfo(
   token: string,
   lineId: LineId,

@@ -65,6 +65,15 @@
                 <LoaderCircle v-if="trimButtonRecording(line)" class="spin" :size="16" />
                 <Scissors v-else :size="16" />
               </button>
+              <button
+                class="icon-button small"
+                type="button"
+                :disabled="removeAudioButtonDisabled(line)"
+                aria-label="Remove audio from line"
+                @click.stop="emit('removeAudio', line)"
+              >
+                <VolumeX :size="16" />
+              </button>
             </div>
           </div>
         </div>
@@ -83,6 +92,7 @@ import {
   LoaderCircle,
   Scissors,
   Volume2,
+  VolumeX,
 } from 'lucide-vue-next';
 
 import type { LineId, LineRecord } from '@/api/types';
@@ -101,6 +111,7 @@ const emit = defineEmits<{
   finishAudio: [line: LineRecord];
   trimAudio: [line: LineRecord];
   finishTrimAudio: [line: LineRecord];
+  removeAudio: [line: LineRecord];
 }>();
 
 const transcriptShell = shallowRef<HTMLElement | null>(null);
@@ -146,6 +157,10 @@ function trimButtonRecording(line: LineRecord): boolean {
 
 function trimButtonDisabled(line: LineRecord): boolean {
   return !trimButtonRecording(line) && line.audio?.status !== 'ready';
+}
+
+function removeAudioButtonDisabled(line: LineRecord): boolean {
+  return line.audio?.status !== 'recording' && line.audio?.status !== 'ready';
 }
 
 function scrollToTop(): void {

@@ -206,6 +206,7 @@ pub struct AudioTrimSource {
 #[serde(rename_all = "snake_case")]
 pub enum AudioEndReason {
     Manual,
+    LineAdvanced,
     Silence,
     NoSpeechTimeout,
     MaxDuration,

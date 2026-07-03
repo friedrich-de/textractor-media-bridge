@@ -6,7 +6,13 @@ use bridge_protocol::{
 use std::time::Duration;
 use tracing::debug;
 
-use crate::media::audio::{slice_pcm16_wav, FinishedMainAudio, FinishedTrimAudio};
+use crate::{
+    media::audio::{
+        slice_pcm16_wav, FinishedMainAudio, FinishedTrimAudio, MAIN_AUDIO_MAX_DURATION_MS,
+        TRIM_AUDIO_MAX_DURATION_MS, TRIM_AUDIO_POSTROLL_MS,
+    },
+    time::unix_ms_now,
+};
 
 use super::AppState;
 
@@ -284,41 +290,112 @@ impl AppState {
         })
     }
 
-    pub(super) fn spawn_audio_auto_finish(&self, line_id: LineId) {
+    pub async fn remove_audio(&self, line_id: LineId) -> Result<AudioFinishResponse> {
+        self.inner.audio.remove_line_session(line_id);
+        let audio = AudioState::NoAudio { reason: None };
+        let updated = self.inner.history.update(line_id, |line| {
+            line.audio = Some(audio.clone());
+        })?;
+        if let Some(line) = updated {
+            self.broadcast_line_update(
+                line.line_seq,
+                line_id,
+                LinePatch {
+                    audio: Some(line.audio.clone()),
+                    ..LinePatch::default()
+                },
+            );
+        }
+        Ok(AudioFinishResponse {
+            line_id,
+            audio: Some(audio),
+        })
+    }
+
+    pub(super) fn spawn_audio_deadlines(&self, line_id: LineId, started_unix_ms: i64) {
+        self.spawn_main_deadline(
+            line_id,
+            started_unix_ms.saturating_add(ms_to_i64(MAIN_AUDIO_MAX_DURATION_MS)),
+        );
+        self.spawn_trim_deadline(
+            line_id,
+            started_unix_ms.saturating_add(ms_to_i64(TRIM_AUDIO_MAX_DURATION_MS)),
+        );
+    }
+
+    pub(super) async fn finish_recordings_for_new_line(&self, process_id: u32, end_unix_ms: i64) {
+        for line_id in self
+            .inner
+            .audio
+            .main_recording_line_ids_for_process(process_id)
+        {
+            if let Err(error) =
+                self.finish_audio_at(line_id, AudioEndReason::LineAdvanced, end_unix_ms)
+            {
+                debug!(%error, line_id, process_id, "audio next-line finalize skipped");
+            }
+            self.spawn_trim_postroll_finish(
+                line_id,
+                end_unix_ms.saturating_add(ms_to_i64(TRIM_AUDIO_POSTROLL_MS)),
+            );
+        }
+    }
+
+    fn spawn_main_deadline(&self, line_id: LineId, deadline_unix_ms: i64) {
         let state = self.clone();
         tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_millis(200)).await;
-                if let Some(reason) = state.inner.audio.line_end_reason(line_id) {
-                    if let Err(error) = state.finish_audio(line_id, reason).await {
-                        debug!(%error, line_id, "audio auto-finalize skipped");
-                    }
-                }
-                if let Some(reason) = state.inner.audio.trim_line_end_reason(line_id) {
-                    if let Err(error) = state.finish_trim_audio(line_id, reason).await {
-                        debug!(%error, line_id, "trim audio auto-finalize skipped");
-                    }
-                }
-                if !state.inner.audio.is_recording(line_id) {
-                    break;
+            sleep_until_unix_ms(deadline_unix_ms).await;
+            if state.inner.audio.is_main_recording(line_id) {
+                if let Err(error) =
+                    state.finish_audio_at(line_id, AudioEndReason::MaxDuration, deadline_unix_ms)
+                {
+                    debug!(%error, line_id, "audio max-duration finalize skipped");
                 }
             }
         });
     }
 
-    pub(super) async fn finish_recordings_for_new_line(&self, process_id: u32, end_unix_ms: i64) {
-        for line_id in self.inner.audio.recording_line_ids_for_process(process_id) {
-            if let Err(error) = self.finish_audio_at(line_id, AudioEndReason::Silence, end_unix_ms)
-            {
-                debug!(%error, line_id, process_id, "audio next-line finalize skipped");
+    fn spawn_trim_deadline(&self, line_id: LineId, deadline_unix_ms: i64) {
+        let state = self.clone();
+        tokio::spawn(async move {
+            sleep_until_unix_ms(deadline_unix_ms).await;
+            if state.inner.audio.is_recording(line_id) {
+                if let Err(error) = state.finish_trim_audio_at(
+                    line_id,
+                    AudioEndReason::MaxDuration,
+                    deadline_unix_ms,
+                ) {
+                    debug!(%error, line_id, "trim audio max-duration finalize skipped");
+                }
             }
-            if let Err(error) =
-                self.finish_trim_audio_at(line_id, AudioEndReason::Silence, end_unix_ms)
-            {
-                debug!(%error, line_id, process_id, "trim audio next-line finalize skipped");
-            }
-        }
+        });
     }
+
+    fn spawn_trim_postroll_finish(&self, line_id: LineId, deadline_unix_ms: i64) {
+        let state = self.clone();
+        tokio::spawn(async move {
+            sleep_until_unix_ms(deadline_unix_ms).await;
+            if state.inner.audio.is_recording(line_id) {
+                if let Err(error) = state.finish_trim_audio_at(
+                    line_id,
+                    AudioEndReason::LineAdvanced,
+                    deadline_unix_ms,
+                ) {
+                    debug!(%error, line_id, "trim post-roll finalize skipped");
+                }
+            }
+        });
+    }
+}
+
+async fn sleep_until_unix_ms(deadline_unix_ms: i64) {
+    let now = unix_ms_now();
+    let delay_ms = deadline_unix_ms.saturating_sub(now).max(0) as u64;
+    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+}
+
+fn ms_to_i64(ms: u64) -> i64 {
+    ms.min(i64::MAX as u64) as i64
 }
 
 pub(super) fn trim_info_for_line(line: &LineRecord) -> Result<AudioTrimInfoResponse> {

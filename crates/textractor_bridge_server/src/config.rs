@@ -136,36 +136,12 @@ impl Default for ScreenshotConfig {
 #[serde(default)]
 pub struct AudioConfig {
     pub backend: String,
-    pub ready_preroll_ms: u64,
-    pub trailing_silence_ms: u64,
-    pub no_speech_timeout_ms: u64,
-    pub trim_source_preroll_ms: u64,
-    pub trim_trailing_silence_ms: u64,
-    pub trim_no_speech_timeout_ms: u64,
-    pub activity_threshold: u16,
-    pub min_activity_ms: u64,
-    pub trim_activity_threshold: u16,
-    pub trim_min_activity_ms: u64,
-    pub trim_padding_ms: u64,
-    pub max_duration_ms: u64,
 }
 
 impl Default for AudioConfig {
     fn default() -> Self {
         Self {
             backend: "auto".to_owned(),
-            ready_preroll_ms: 1_000,
-            trailing_silence_ms: 3_000,
-            no_speech_timeout_ms: 5_000,
-            trim_source_preroll_ms: 1_000,
-            trim_trailing_silence_ms: 5_000,
-            trim_no_speech_timeout_ms: 8_000,
-            activity_threshold: 300,
-            min_activity_ms: 30,
-            trim_activity_threshold: 300,
-            trim_min_activity_ms: 30,
-            trim_padding_ms: 1_000,
-            max_duration_ms: 120_000,
         }
     }
 }
@@ -273,7 +249,6 @@ tags = ["textractor", "mined"]
         let config: AppConfig = toml::from_str(text).expect("old config should load");
 
         assert_eq!(config.audio.backend, "auto");
-        assert_eq!(config.audio.ready_preroll_ms, 1_000);
         assert_eq!(config.mining.screenshot_quality, 85);
         assert_eq!(config.anki.range_screenshot_pick, RangeScreenshotPick::Last);
     }
@@ -291,6 +266,18 @@ tags = ["textractor", "mined"]
             "deck_name",
             "notes_field",
             "tags",
+            "ready_preroll_ms",
+            "trailing_silence_ms",
+            "no_speech_timeout_ms",
+            "trim_source_preroll_ms",
+            "trim_trailing_silence_ms",
+            "trim_no_speech_timeout_ms",
+            "activity_threshold",
+            "min_activity_ms",
+            "trim_activity_threshold",
+            "trim_min_activity_ms",
+            "trim_padding_ms",
+            "max_duration_ms",
         ] {
             assert!(
                 !text.contains(removed),

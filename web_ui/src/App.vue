@@ -47,6 +47,7 @@
       @finish-audio="finishAudio"
       @trim-audio="trimLineAudio"
       @finish-trim-audio="finishTrimAudio"
+      @remove-audio="removeAudio"
     />
 
     <SelectionBar
@@ -143,6 +144,7 @@ const {
   clearLines: clearServerLines,
   finishLineAudio,
   finishLineTrimAudio,
+  removeLineAudio,
   updateLineAudio,
 } = useBridgeLines(toast);
 
@@ -263,6 +265,14 @@ async function finishTrimAudio(line: LineRecord): Promise<void> {
     await finishLineTrimAudio(line.lineId);
   } catch (error) {
     toast.error(error instanceof Error ? error.message : 'Unable to finish trim audio.');
+  }
+}
+
+async function removeAudio(line: LineRecord): Promise<void> {
+  try {
+    await removeLineAudio(line.lineId);
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Unable to remove audio.');
   }
 }
 

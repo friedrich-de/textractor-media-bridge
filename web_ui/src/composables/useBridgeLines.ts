@@ -9,6 +9,7 @@ import {
   loadSessionToken,
   openEventSource,
   parseBrowserEvent,
+  removeAudio,
 } from '@/api/bridge';
 import type { AudioState, LineId, LinePatch, LineRecord, PublicConfig } from '@/api/types';
 import type { ToastApi } from '@/composables/useToast';
@@ -83,6 +84,11 @@ export function useBridgeLines(toast: ToastApi) {
 
   async function finishLineTrimAudio(lineId: LineId): Promise<void> {
     const audio = await finishTrimAudio(token.value, lineId);
+    patchLine(lineId, { audio });
+  }
+
+  async function removeLineAudio(lineId: LineId): Promise<void> {
+    const audio = await removeAudio(token.value, lineId);
     patchLine(lineId, { audio });
   }
 
@@ -185,6 +191,7 @@ export function useBridgeLines(toast: ToastApi) {
     clearLines,
     finishLineAudio,
     finishLineTrimAudio,
+    removeLineAudio,
     updateLineAudio,
   };
 }

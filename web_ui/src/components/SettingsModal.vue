@@ -186,11 +186,7 @@
 
           <section class="settings-section">
             <div class="section-heading">
-              <h3>Audio capture (normal)</h3>
-              <button class="secondary-action ghost" type="button" @click="resetAudioDefaults">
-                <RotateCcw :size="16" />
-                <span>Audio defaults</span>
-              </button>
+              <h3>Audio capture</h3>
             </div>
 
             <div class="settings-grid">
@@ -202,48 +198,6 @@
                   <option value="system-loopback">System loopback</option>
                   <option value="off">Off</option>
                 </select>
-              </label>
-
-              <label
-                v-for="field in normalAudioFields"
-                :key="field.key"
-                class="field compact"
-                :class="{ 'span-two': field.spanTwo }"
-              >
-                <span>{{ field.label }}</span>
-                <input
-                  v-model.number="localAudioConfig[field.key]"
-                  :name="field.name"
-                  type="number"
-                  :min="field.min"
-                  :max="field.max"
-                  :step="field.step"
-                />
-              </label>
-            </div>
-          </section>
-
-          <section class="settings-section">
-            <div class="section-heading">
-              <h3>Audio capture (extended trim)</h3>
-            </div>
-
-            <div class="settings-grid">
-              <label
-                v-for="field in trimAudioFields"
-                :key="field.key"
-                class="field compact"
-                :class="{ 'span-two': field.spanTwo }"
-              >
-                <span>{{ field.label }}</span>
-                <input
-                  v-model.number="localAudioConfig[field.key]"
-                  :name="field.name"
-                  type="number"
-                  :min="field.min"
-                  :max="field.max"
-                  :step="field.step"
-                />
               </label>
             </div>
           </section>
@@ -276,13 +230,7 @@ import { LoaderCircle, PlugZap, RefreshCw, RotateCcw, X } from 'lucide-vue-next'
 
 import { getModelsWithFields } from '@/api/ankiConnect';
 import type { AudioConfig } from '@/api/types';
-import {
-  cloneAudioConfig,
-  defaultAudioConfig,
-  normalAudioFields,
-  normalizeAudioConfig,
-  trimAudioFields,
-} from '@/lib/audioSettings';
+import { cloneAudioConfig, defaultAudioConfig, normalizeAudioConfig } from '@/lib/audioSettings';
 import type { MinerSettings } from '@/lib/minerSettings';
 import { cloneMinerSettings, defaultMinerSettings } from '@/lib/minerSettings';
 
@@ -387,10 +335,6 @@ function resetToLapis(): void {
     endpoint: localSettings.anki.endpoint,
     deckName: localSettings.anki.deckName,
   };
-}
-
-function resetAudioDefaults(): void {
-  Object.assign(localAudioConfig, defaultAudioConfig);
 }
 
 function save(): void {
