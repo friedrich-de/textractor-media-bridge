@@ -169,6 +169,6 @@ Binary distributions may include FFmpeg as a separate GPLv3 executable for MP3 p
 This repository implements the architecture and a functional text/history/SSE/Vue UI/mining path. The advanced Windows media backends are intentionally isolated behind traits, but not all production capture paths are complete yet:
 
 - Screenshot capture defaults to Windows Graphics Capture with Win32 GDI fallback. True DXGI desktop-duplication crop is not implemented.
-- WASAPI process-loopback audio capture is implemented, with system loopback fallback when process loopback is unavailable. Line sessions finalize on manual finish, max duration, or the next line arriving. Main audio captures from one second before the line through its end; trim sources capture from ten seconds before the line and, on line advancement, include ten seconds after the line end.
+- WASAPI process-loopback audio capture is implemented, with system loopback fallback when process loopback is unavailable. Line sessions finalize on manual finish, max duration, or the next line arriving. Main audio captures from two seconds before the line through its end; trim sources capture from ten seconds before the line and, on line advancement, include ten seconds after the line end.
 - Mining prepares MP3 audio through FFmpeg. When multiple selected lines have ready audio, they are concatenated in transcript order and encoded as a single MP3.
 - Named pipe security uses Tokio's named pipe creation path and does not yet install a custom current-user/admins/SYSTEM security descriptor.

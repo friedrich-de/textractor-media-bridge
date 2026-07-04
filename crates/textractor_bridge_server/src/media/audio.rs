@@ -16,7 +16,7 @@ use crate::{config::AudioConfig, time::unix_ms_now};
 const CAPTURE_SAMPLE_RATE: u32 = 48_000;
 const CAPTURE_CHANNELS: u16 = 2;
 const CAPTURE_CHUNK_FRAMES: usize = 480;
-pub const MAIN_AUDIO_PREROLL_MS: u64 = 1_000;
+pub const MAIN_AUDIO_PREROLL_MS: u64 = 2_000;
 pub const TRIM_AUDIO_PREROLL_MS: u64 = 10_000;
 pub const TRIM_AUDIO_POSTROLL_MS: u64 = 10_000;
 pub const MAIN_AUDIO_MAX_DURATION_MS: u64 = 120_000;
@@ -741,13 +741,13 @@ mod tests {
         let FinishedMainAudio::Ready(captured) = finished else {
             panic!("main audio should be ready");
         };
-        assert_eq!(captured.duration_ms, 3_500);
+        assert_eq!(captured.duration_ms, 4_500);
         assert_eq!(captured.end_reason, AudioEndReason::LineAdvanced);
         assert_eq!(captured.trim_recording_started_unix_ms, 0);
 
         let samples = decode_encoded_samples(&captured.bytes);
-        assert_eq!(samples.len(), 168_000);
-        assert_eq!(samples.first(), Some(&9_000));
+        assert_eq!(samples.len(), 216_000);
+        assert_eq!(samples.first(), Some(&8_000));
         assert_eq!(samples.last(), Some(&12_499));
     }
 
