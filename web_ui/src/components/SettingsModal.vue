@@ -29,7 +29,7 @@
               <button
                 class="secondary-action"
                 type="button"
-                :disabled="connectionStatus === 'testing'"
+                :disabled="!hasAnkiEndpoint || connectionStatus === 'testing'"
                 @click="testConnection"
               >
                 <LoaderCircle v-if="connectionStatus === 'testing'" class="spin" :size="16" />
@@ -59,7 +59,7 @@
               <button
                 class="secondary-action ghost"
                 type="button"
-                :disabled="connectionStatus !== 'connected'"
+                :disabled="!hasAnkiEndpoint || connectionStatus === 'testing'"
                 @click="loadModels"
               >
                 <RefreshCw :size="16" />
@@ -279,7 +279,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { LoaderCircle, PlugZap, Plus, RefreshCw, RotateCcw, Trash2, X } from '@lucide/vue';
 
 import { getModelsWithFields } from '@/api/ankiConnect';
@@ -340,20 +340,24 @@ const localLineConfig = reactive<LineConfig>(
 const connectionStatus = ref<ConnectionStatus>('untested');
 const connectionError = ref<string | null>(null);
 const modelsWithFields = ref<Record<string, string[]>>({});
+const fieldsLoaded = ref(false);
 const regexErrors = ref<Array<string | null>>([]);
+let modelLoadRequestId = 0;
 
 const modelNames = computed(() => Object.keys(modelsWithFields.value).sort());
+const hasAnkiEndpoint = computed(() => localSettings.anki.endpoint.trim().length > 0);
 const availableFields = computed(() => {
-  const fromAnki = modelsWithFields.value[localSettings.anki.modelName] ?? [];
-  return fromAnki.length > 0
-    ? fromAnki
-    : [
-        localSettings.anki.frontField,
-        localSettings.anki.sentenceField,
-        localSettings.anki.audioField,
-        localSettings.anki.imageField,
-        localSettings.anki.sourceField,
-      ].filter(Boolean);
+  if (fieldsLoaded.value) {
+    return modelsWithFields.value[localSettings.anki.modelName] ?? [];
+  }
+
+  return [
+    localSettings.anki.frontField,
+    localSettings.anki.sentenceField,
+    localSettings.anki.audioField,
+    localSettings.anki.imageField,
+    localSettings.anki.sourceField,
+  ].filter(Boolean);
 });
 const connectionLabel = computed(() => {
   if (connectionStatus.value === 'connected') {
@@ -371,22 +375,46 @@ const connectionLabel = computed(() => {
   return 'Not tested';
 });
 
-async function testConnection(): Promise<void> {
-  connectionStatus.value = 'testing';
-  connectionError.value = null;
-  try {
-    await loadModels();
-    connectionStatus.value = 'connected';
-  } catch (error) {
-    connectionStatus.value = 'error';
-    connectionError.value = error instanceof Error ? error.message : 'Unable to connect';
+onMounted(() => {
+  if (hasAnkiEndpoint.value) {
+    void loadModels();
   }
+});
+
+async function testConnection(): Promise<void> {
+  await loadModels();
 }
 
 async function loadModels(): Promise<void> {
-  modelsWithFields.value = await getModelsWithFields(localSettings.anki.endpoint);
-  applyModelDefault();
-  applyFieldDefaults();
+  const requestId = ++modelLoadRequestId;
+  const endpoint = localSettings.anki.endpoint.trim();
+  if (!endpoint) {
+    connectionStatus.value = 'error';
+    connectionError.value = 'AnkiConnect endpoint is required';
+    modelsWithFields.value = {};
+    fieldsLoaded.value = false;
+    return;
+  }
+
+  connectionStatus.value = 'testing';
+  connectionError.value = null;
+  try {
+    const nextModelsWithFields = await getModelsWithFields(endpoint);
+    if (requestId !== modelLoadRequestId) {
+      return;
+    }
+    modelsWithFields.value = nextModelsWithFields;
+    fieldsLoaded.value = true;
+    applyModelDefault();
+    applyFieldDefaults();
+    connectionStatus.value = 'connected';
+  } catch (error) {
+    if (requestId !== modelLoadRequestId) {
+      return;
+    }
+    connectionStatus.value = 'error';
+    connectionError.value = error instanceof Error ? error.message : 'Unable to connect';
+  }
 }
 
 function applyModelDefault(): void {
