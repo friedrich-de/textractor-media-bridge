@@ -1,3 +1,4 @@
+
 ![Textractor Extensions window showing Textractor Media Bridge](docs/pics/logo.png)
 
 [![Release](https://github.com/friedrich-de/textractor-media-bridge/actions/workflows/release.yml/badge.svg)](https://github.com/friedrich-de/textractor-media-bridge/actions/workflows/release.yml)
@@ -19,8 +20,12 @@ Start here: [Installation](docs/INSTALLATION.md)
 
 **Desktop**
 
+https://github.com/user-attachments/assets/04496177-035b-48dc-bf7d-40d8c0cde3f1
 
 **Phone**
+
+https://github.com/user-attachments/assets/d32327d6-c662-40da-aaac-2711eb120678
+
 
 ## Documentation
 
