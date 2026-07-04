@@ -231,7 +231,6 @@ mod tests {
             screenshot: None,
             audio,
             warnings: Vec::new(),
-            ignored: false,
         }
     }
 

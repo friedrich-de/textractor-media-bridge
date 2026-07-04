@@ -35,7 +35,6 @@ struct LinesQuery {
     limit: Option<usize>,
     before_seq: Option<u64>,
     after_seq: Option<u64>,
-    source_key: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -91,7 +90,6 @@ struct ClearLinesResponse {
 pub fn router(state: AppState) -> Router {
     let api_routes = Router::new()
         .route("/api/config", get(config).post(update_config))
-        .route("/api/config/audio", post(update_audio_config))
         .route("/api/events", get(events))
         .route("/api/lines", get(lines).delete(clear_lines))
         .route("/api/lines/{line_id}/audio", delete(remove_audio))
@@ -132,16 +130,6 @@ async fn health(State(state): State<AppState>) -> Json<Health> {
 
 async fn config(State(state): State<AppState>) -> Json<PublicConfig> {
     Json(public_config(&state, state.config()))
-}
-
-async fn update_audio_config(
-    State(state): State<AppState>,
-    Json(audio): Json<AudioConfig>,
-) -> Result<Json<PublicConfig>, ApiError> {
-    let config = state
-        .update_audio_config(audio)
-        .map_err(ApiError::bad_request)?;
-    Ok(Json(public_config(&state, config)))
 }
 
 async fn update_config(
@@ -203,7 +191,6 @@ async fn lines(
         query.limit.unwrap_or(100),
         query.before_seq,
         query.after_seq,
-        query.source_key.as_deref(),
     ))
 }
 
@@ -222,7 +209,7 @@ async fn events(
         .and_then(|value| value.parse::<u64>().ok());
     let mut receiver = state.subscribe();
     let replay = last_event_id
-        .map(|seq| state.line_page(500, None, Some(seq), None).lines)
+        .map(|seq| state.line_page(500, None, Some(seq)).lines)
         .unwrap_or_default();
     let newest = state.newest_seq();
 

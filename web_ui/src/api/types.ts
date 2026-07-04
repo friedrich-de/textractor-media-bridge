@@ -70,7 +70,6 @@ export interface LineRecord {
   screenshot?: AssetInfo | null;
   audio?: AudioState | null;
   warnings: string[];
-  ignored: boolean;
 }
 
 export interface LinePatch {
@@ -78,7 +77,6 @@ export interface LinePatch {
   screenshot?: AssetInfo | null;
   audio?: AudioState | null;
   warnings?: string[];
-  ignored?: boolean;
 }
 
 export interface LineHistoryPage {

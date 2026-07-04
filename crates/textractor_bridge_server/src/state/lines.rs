@@ -20,12 +20,8 @@ impl AppState {
         limit: usize,
         before_seq: Option<LineSeq>,
         after_seq: Option<LineSeq>,
-        source_key: Option<&str>,
     ) -> LineHistoryPage {
-        let mut page = self
-            .inner
-            .history
-            .page(limit, before_seq, after_seq, source_key);
+        let mut page = self.inner.history.page(limit, before_seq, after_seq);
         self.enrich_window_titles(&mut page.lines);
         page
     }
@@ -72,7 +68,6 @@ impl AppState {
             screenshot: None,
             audio,
             warnings: Vec::new(),
-            ignored: false,
         };
 
         self.inner.history.upsert(line.clone())?;
@@ -558,7 +553,6 @@ mod tests {
             screenshot: None,
             audio,
             warnings: Vec::new(),
-            ignored: false,
         }
     }
 

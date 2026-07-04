@@ -33,9 +33,9 @@ UTF-8 JSON payload
 ```text
 GET  /api/health
 GET  /api/config
-POST /api/config/audio
+POST /api/config
 GET  /api/events
-GET  /api/lines?limit=&beforeSeq=&afterSeq=&sourceKey=
+GET  /api/lines?limit=&beforeSeq=&afterSeq=
 DELETE /api/lines
 DELETE /api/lines/{line_id}/audio
 POST /api/lines/{line_id}/audio/finish

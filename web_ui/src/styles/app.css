@@ -322,10 +322,6 @@ select:focus-visible {
   color: var(--text);
 }
 
-.cue-row.ignored {
-  opacity: 0.48;
-}
-
 .cue-content {
   display: grid;
   gap: 8px;

@@ -16,7 +16,6 @@
           active: line.lineId === activeLineId,
           past: line.lineSeq < activeLineSeq,
           selected: selectedLineIds.has(line.lineId),
-          ignored: line.ignored,
         }"
         @click="emit('toggleLine', line.lineId)"
       >

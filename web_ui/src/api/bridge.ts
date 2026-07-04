@@ -1,6 +1,5 @@
 import type {
   AssetBase64Response,
-  AudioConfig,
   AudioState,
   AudioTrimInfoResponse,
   AudioTrimRequest,
@@ -26,13 +25,6 @@ export function assetUrl(url: string): string {
 
 export async function getConfig(): Promise<PublicConfig> {
   return apiJson<PublicConfig>('/api/config');
-}
-
-export async function updateAudioConfig(audioConfig: AudioConfig): Promise<PublicConfig> {
-  return apiJson<PublicConfig>('/api/config/audio', {
-    method: 'POST',
-    body: JSON.stringify(audioConfig),
-  });
 }
 
 export async function updateConfig(config: EditableConfigRequest): Promise<PublicConfig> {

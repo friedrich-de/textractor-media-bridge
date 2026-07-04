@@ -166,7 +166,6 @@ export function useBridgeLines(toast: ToastApi) {
         screenshot: 'screenshot' in patch ? patch.screenshot : line.screenshot,
         audio: 'audio' in patch ? patch.audio : line.audio,
         warnings: patch.warnings ?? line.warnings,
-        ignored: patch.ignored ?? line.ignored,
       };
     });
   }

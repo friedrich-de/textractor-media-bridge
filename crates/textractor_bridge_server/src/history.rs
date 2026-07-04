@@ -162,22 +162,14 @@ impl HistoryStore {
         limit: usize,
         before_seq: Option<LineSeq>,
         after_seq: Option<LineSeq>,
-        source_key: Option<&str>,
     ) -> LineHistoryPage {
         let limit = limit.clamp(1, 500);
         let lines = self.lines.read();
-
-        let source_matches = |line: &&LineRecord| {
-            source_key
-                .map(|source| line.source_key() == source)
-                .unwrap_or(true)
-        };
 
         let mut selected: Vec<LineRecord> = if let Some(after_seq) = after_seq {
             lines
                 .range((after_seq + 1)..)
                 .map(|(_, line)| line)
-                .filter(source_matches)
                 .take(limit)
                 .cloned()
                 .collect()
@@ -186,7 +178,6 @@ impl HistoryStore {
                 .range(..before_seq)
                 .rev()
                 .map(|(_, line)| line)
-                .filter(source_matches)
                 .take(limit)
                 .cloned()
                 .collect();
@@ -197,7 +188,6 @@ impl HistoryStore {
                 .iter()
                 .rev()
                 .map(|(_, line)| line)
-                .filter(source_matches)
                 .take(limit)
                 .cloned()
                 .collect();
@@ -209,25 +199,10 @@ impl HistoryStore {
         let oldest_seq = selected.first().map(|line| line.line_seq);
         let newest_seq = selected.last().map(|line| line.line_seq);
         let has_more_older = oldest_seq
-            .map(|oldest| {
-                lines.range(..oldest).map(|(_, line)| line).any(|line| {
-                    source_key
-                        .map(|source| line.source_key() == source)
-                        .unwrap_or(true)
-                })
-            })
+            .map(|oldest| lines.range(..oldest).next().is_some())
             .unwrap_or(false);
         let has_more_newer = newest_seq
-            .map(|newest| {
-                lines
-                    .range((newest + 1)..)
-                    .map(|(_, line)| line)
-                    .any(|line| {
-                        source_key
-                            .map(|source| line.source_key() == source)
-                            .unwrap_or(true)
-                    })
-            })
+            .map(|newest| lines.range((newest + 1)..).next().is_some())
             .unwrap_or(false);
 
         LineHistoryPage {
@@ -333,7 +308,6 @@ mod tests {
             screenshot: None,
             audio: None,
             warnings: vec![],
-            ignored: false,
         }
     }
 
@@ -359,7 +333,7 @@ mod tests {
             store.upsert(line(seq)).unwrap();
         }
 
-        let recent = store.page(2, None, None, None);
+        let recent = store.page(2, None, None);
         assert_eq!(
             recent
                 .lines
@@ -370,7 +344,7 @@ mod tests {
         );
         assert!(recent.has_more_older);
 
-        let older = store.page(2, Some(4), None, None);
+        let older = store.page(2, Some(4), None);
         assert_eq!(
             older
                 .lines

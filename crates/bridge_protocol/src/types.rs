@@ -66,18 +66,6 @@ pub struct LineRecord {
     pub audio: Option<AudioState>,
     #[serde(default)]
     pub warnings: Vec<String>,
-    #[serde(default)]
-    pub ignored: bool,
-}
-
-impl LineRecord {
-    pub fn source_key(&self) -> String {
-        source_key(&self.meta)
-    }
-}
-
-pub fn source_key(meta: &PipeLineMeta) -> String {
-    format!("{}:{}", meta.process_id, thread_label(meta))
 }
 
 pub fn thread_label(meta: &PipeLineMeta) -> String {
@@ -113,8 +101,6 @@ pub struct LinePatch {
     pub audio: Option<Option<AudioState>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub warnings: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ignored: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -299,7 +285,6 @@ mod tests {
         };
 
         assert_eq!(thread_label(&meta), "thread 17");
-        assert_eq!(source_key(&meta), "1234:thread 17");
     }
 
     #[test]

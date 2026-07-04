@@ -98,11 +98,6 @@ impl AppState {
         self.inner.config.read().clone()
     }
 
-    pub fn update_audio_config(&self, audio: AudioConfig) -> Result<AppConfig> {
-        let lines = self.config().lines;
-        self.update_editable_config(audio, lines)
-    }
-
     pub fn update_editable_config(
         &self,
         audio: AudioConfig,
