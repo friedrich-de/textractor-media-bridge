@@ -67,22 +67,16 @@ textractor-media-bridge-<tag>-x64.zip
 textractor-media-bridge-<tag>-x86.zip
 ```
 
-## Install to the x86 Textractor Test Folder
+## Install to Textractor
 
-The release server serves the browser app from resources embedded in `textractor_bridge_server.exe`. Build the UI before the server, then run the install script:
+The release server serves the browser app from resources embedded in `textractor_bridge_server.exe`. Install by copying the release zip contents into the Textractor folder for the matching architecture.
 
-```powershell
-cd web_ui
-npm run build
-cd ..
-cargo build -p textractor_bridge_server --release
-.\scripts\install-x86.ps1
-```
-
-The clean live layout is:
+The folder only needs these files:
 
 ```text
-C:\Users\ald\Documents\x86\textractor_bridge_server.exe
+textractor_bridge_server.exe
+Textractor Media Bridge.xdll
+ffmpeg.exe
 ```
 
 ## Run
