@@ -1,5 +1,13 @@
 # Installation
 
+## Install Textractor
+
+Textractor is required. I recommend:
+
+https://github.com/Chenx221/Textractor
+
+The Releases tab may show an older release date, but newer builds are appended to the bottom of the release page. Scroll down and download the newest matching build.
+
 ## Install to Textractor
 
 Download the release zip matching your Textractor/game architecture:
@@ -9,7 +17,7 @@ textractor-media-bridge-<tag>-x64.zip
 textractor-media-bridge-<tag>-x86.zip
 ```
 
-Copy the zip contents (three files) into the matching Textractor folder (next to Textractor.exe). 
+Copy the zip contents (three files) into the matching Textractor folder, next to `Textractor.exe`.
 
 ```text
 textractor_bridge_server.exe
@@ -25,7 +33,7 @@ ffmpeg.exe
 
 2. Start Textractor and attach your game.
 3. Select the desired Textractor text thread.
-4. Let the extension start `textractor_bridge_server.exe`, (or start it manually). It starts after advancing text for the first time.
+4. Let the extension start `textractor_bridge_server.exe`, or start it manually. It starts after advancing text for the first time.
 
 > **Network access**
 >
@@ -39,31 +47,23 @@ ffmpeg.exe
 
 ![Textractor Media Bridge tray menu](pics/tray.png)
 
-Only active, real text threads are forwarded:
-
-```text
-current select != 0
-text number != 0
-text number != 1
-```
-
-## Running
-
-Windows release builds start as a notification-area tray app by default. The tray menu can open the local UI, copy the local LAN URL, or quit the server. The tray tooltip shows both the browser server and the WebSocket compatibility server.
-
 Default UI on the PC:
 
 ```text
 http://127.0.0.1:7788/
 ```
 
-The server binds to `0.0.0.0:7788` by default so the UI is reachable from the local network. For phone/tablet access, use the tray menu's `Copy Local LAN URL` action or open:
+## Mining from other devices
+
+To add media to cards from another device, add the UI origin to your allowed CORS list. For example, allow:
 
 ```text
-http://<PC-LAN-IP>:7788/
+http://192.168.178.120:7788
 ```
 
-The browser app includes a web app manifest and service worker. Full PWA installation from another device normally requires HTTPS; plain HTTP LAN access is useful for testing and browser use, but mobile install prompts may be unavailable unless the page is served through a trusted HTTPS origin.
+On Android, if you need multiple allowed CORS origins, use this AnkiConnect Android fork:
+
+https://github.com/friedrich-de/AnkiconnectAndroid-Kai
 
 ## WebSocket Compatibility
 
@@ -88,5 +88,7 @@ The browser talks directly to AnkiConnect/Yomitan on the device running the fron
 ```text
 http://127.0.0.1:8765
 ```
+
+Before mining, make sure AnkiConnect is reachable and your Anki setup is ready.
 
 The UI updates the newest recent note matching the configured note type and target fields. Media assets are base64 fetched from the Rust server and attached through AnkiConnect `picture`/`audio` fields. Mining audio is prepared as MP3 with FFmpeg from the bundled `ffmpeg.exe`.
