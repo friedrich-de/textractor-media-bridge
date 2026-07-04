@@ -3,9 +3,8 @@ use std::{
     mem::size_of,
     net::SocketAddr,
     ptr::{copy_nonoverlapping, null_mut},
-    sync::mpsc::{self, Receiver, Sender},
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::sync::oneshot;
 use tracing::{info, warn};
@@ -31,6 +30,7 @@ const ICON_BYTES: &[u8] = include_bytes!("../../../web_ui/public/favicon.png");
 const OPEN_UI_ID: &str = "open_web_ui";
 const COPY_LAN_URL_ID: &str = "copy_lan_url";
 const QUIT_ID: &str = "quit";
+const SERVER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 enum TrayCommand {
     OpenUi,
@@ -48,53 +48,22 @@ struct TrayApp {
 pub(crate) fn run(prepared: PreparedServer) -> Result<()> {
     let local_url = prepared.local_url.clone();
     let bind_addr = prepared.bind_addr;
-    let (command_tx, command_rx) = mpsc::channel();
-    let _tray_app = TrayApp::new(command_tx)?;
+    let tray_app = TrayApp::new()?;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let server_handle = thread::spawn(move || run_server_thread(prepared, shutdown_rx));
 
-    run_message_loop(command_rx, local_url, bind_addr, shutdown_tx, server_handle)
+    run_message_loop(tray_app, local_url, bind_addr, shutdown_tx, server_handle)
 }
 
 impl TrayApp {
-    fn new(command_tx: Sender<TrayCommand>) -> Result<Self> {
+    fn new() -> Result<Self> {
         let menu = Menu::new();
         let open_ui = MenuItem::with_id(OPEN_UI_ID, "Open Web UI", true, None);
         let copy_lan_url = MenuItem::with_id(COPY_LAN_URL_ID, "Copy Local LAN URL", true, None);
         let quit = MenuItem::with_id(QUIT_ID, "Quit", true, None);
         menu.append_items(&[&open_ui, &copy_lan_url, &quit])
             .context("failed to build tray menu")?;
-
-        let menu_tx = command_tx.clone();
-        MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
-            let command = match event.id.as_ref() {
-                OPEN_UI_ID => Some(TrayCommand::OpenUi),
-                COPY_LAN_URL_ID => Some(TrayCommand::CopyLanUrl),
-                QUIT_ID => Some(TrayCommand::Quit),
-                _ => None,
-            };
-            if let Some(command) = command {
-                let _ = menu_tx.send(command);
-            }
-        }));
-
-        TrayIconEvent::set_event_handler(Some(move |event| {
-            let should_open = matches!(
-                event,
-                TrayIconEvent::Click {
-                    button: MouseButton::Left,
-                    button_state: MouseButtonState::Up,
-                    ..
-                } | TrayIconEvent::DoubleClick {
-                    button: MouseButton::Left,
-                    ..
-                }
-            );
-            if should_open {
-                let _ = command_tx.send(TrayCommand::OpenUi);
-            }
-        }));
 
         let tray_icon = TrayIconBuilder::new()
             .with_tooltip("Textractor Media Bridge")
@@ -122,49 +91,98 @@ fn load_icon() -> Result<Icon> {
 }
 
 fn run_message_loop(
-    command_rx: Receiver<TrayCommand>,
+    tray_app: TrayApp,
     local_url: String,
     bind_addr: SocketAddr,
     shutdown_tx: oneshot::Sender<()>,
     server_handle: JoinHandle<Result<()>>,
 ) -> Result<()> {
+    let mut tray_app = Some(tray_app);
     let mut shutdown_tx = Some(shutdown_tx);
     let mut quit_requested = false;
     let mut server_finished = false;
+    let mut shutdown_started_at = None;
 
-    while !quit_requested && !server_finished {
-        quit_requested = process_windows_messages();
-        while let Ok(command) = command_rx.try_recv() {
+    while !server_finished {
+        let window_quit_requested = process_windows_messages();
+        if window_quit_requested && !quit_requested {
+            info!("tray window quit requested");
+            quit_requested = true;
+            begin_tray_shutdown(&mut tray_app, &mut shutdown_tx);
+            shutdown_started_at = Some(Instant::now());
+        }
+
+        while let Some(command) = next_tray_command() {
             match command {
-                TrayCommand::OpenUi => open_browser(&local_url),
-                TrayCommand::CopyLanUrl => copy_lan_url(bind_addr),
-                TrayCommand::Quit => {
+                TrayCommand::OpenUi if !quit_requested => open_browser(&local_url),
+                TrayCommand::CopyLanUrl if !quit_requested => copy_lan_url(bind_addr),
+                TrayCommand::Quit if !quit_requested => {
+                    info!("tray quit requested");
                     quit_requested = true;
+                    begin_tray_shutdown(&mut tray_app, &mut shutdown_tx);
+                    shutdown_started_at = Some(Instant::now());
                     break;
                 }
+                _ => {}
             }
         }
 
         server_finished = server_handle.is_finished();
-        if !quit_requested && !server_finished {
+        if quit_requested
+            && !server_finished
+            && shutdown_started_at
+                .is_some_and(|started_at| started_at.elapsed() >= SERVER_SHUTDOWN_TIMEOUT)
+        {
+            warn!(
+                timeout_ms = SERVER_SHUTDOWN_TIMEOUT.as_millis(),
+                "server shutdown timed out; exiting tray process"
+            );
+            return Ok(());
+        }
+
+        if !server_finished {
             thread::sleep(Duration::from_millis(50));
         }
     }
 
-    if !server_finished {
-        if let Some(shutdown_tx) = shutdown_tx.take() {
-            let _ = shutdown_tx.send(());
-        }
-    }
+    drop_tray_icon(&mut tray_app);
 
     let result = join_server(server_handle)?;
-    if server_finished && !quit_requested {
+    match &result {
+        Ok(()) => info!("server shutdown completed"),
+        Err(error) => warn!(%error, "server shutdown failed"),
+    }
+
+    if !quit_requested {
         return match result {
             Ok(()) => Err(anyhow!("server stopped while tray mode was active")),
             Err(error) => Err(error.context("server stopped while tray mode was active")),
         };
     }
     result
+}
+
+fn begin_tray_shutdown(
+    tray_app: &mut Option<TrayApp>,
+    shutdown_tx: &mut Option<oneshot::Sender<()>>,
+) {
+    drop_tray_icon(tray_app);
+    request_server_shutdown(shutdown_tx);
+    info!("waiting for server shutdown");
+}
+
+fn drop_tray_icon(tray_app: &mut Option<TrayApp>) {
+    if tray_app.is_some() {
+        info!("dropping tray icon");
+        *tray_app = None;
+    }
+}
+
+fn request_server_shutdown(shutdown_tx: &mut Option<oneshot::Sender<()>>) {
+    if let Some(shutdown_tx) = shutdown_tx.take() {
+        info!("server shutdown requested");
+        let _ = shutdown_tx.send(());
+    }
 }
 
 fn process_windows_messages() -> bool {
@@ -179,6 +197,38 @@ fn process_windows_messages() -> bool {
         }
     }
     false
+}
+
+fn next_tray_command() -> Option<TrayCommand> {
+    while let Ok(event) = MenuEvent::receiver().try_recv() {
+        info!(id = %event.id.as_ref(), "tray menu event received");
+        match event.id.as_ref() {
+            OPEN_UI_ID => return Some(TrayCommand::OpenUi),
+            COPY_LAN_URL_ID => return Some(TrayCommand::CopyLanUrl),
+            QUIT_ID => return Some(TrayCommand::Quit),
+            _ => {}
+        }
+    }
+
+    while let Ok(event) = TrayIconEvent::receiver().try_recv() {
+        let should_open = matches!(
+            event,
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } | TrayIconEvent::DoubleClick {
+                button: MouseButton::Left,
+                ..
+            }
+        );
+        if should_open {
+            info!("tray open event received");
+            return Some(TrayCommand::OpenUi);
+        }
+    }
+
+    None
 }
 
 fn copy_lan_url(bind_addr: SocketAddr) {

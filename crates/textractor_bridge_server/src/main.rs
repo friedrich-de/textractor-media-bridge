@@ -122,6 +122,7 @@ where
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let shutdown_task = tokio::spawn(async move {
         shutdown.await;
+        info!("server shutdown signal received");
         let _ = shutdown_tx.send(true);
     });
 
@@ -134,23 +135,33 @@ where
                     error!(%error, "pipe server stopped");
                 }
             }
-            _ = wait_for_shutdown(pipe_shutdown) => {}
+            _ = wait_for_shutdown(pipe_shutdown) => {
+                info!("pipe server shutdown requested");
+            }
         }
+        info!("pipe server task finished");
     });
 
     let cleanup_state = state.clone();
     let cleanup_shutdown = shutdown_rx.clone();
     let cleanup_task = tokio::spawn(async move {
         cleanup_loop(cleanup_state, cleanup_shutdown).await;
+        info!("cleanup task finished");
     });
 
+    info!("http server listening");
     axum::serve(listener, http::router(state))
         .with_graceful_shutdown(wait_for_shutdown(shutdown_rx.clone()))
         .await?;
+    info!("http server shutdown completed");
 
     let _ = shutdown_task.await;
+    info!("shutdown signal task joined");
     let _ = pipe_task.await;
+    info!("pipe server task joined");
     let _ = cleanup_task.await;
+    info!("cleanup task joined");
+    info!("textractor media bridge stopped");
     Ok(())
 }
 
@@ -194,7 +205,10 @@ impl Args {
 async fn cleanup_loop(state: AppState, shutdown: watch::Receiver<bool>) {
     loop {
         tokio::select! {
-            _ = wait_for_shutdown(shutdown.clone()) => break,
+            _ = wait_for_shutdown(shutdown.clone()) => {
+                info!("cleanup shutdown requested");
+                break;
+            }
             _ = tokio::time::sleep(Duration::from_secs(60)) => {}
         }
         match state.cleanup_assets_and_history().await {
