@@ -32,6 +32,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web_ui/package-lock.json
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -42,6 +49,12 @@ jobs:
         with:
           key: ${{ matrix.target }}
           cache-targets: true
+
+      - name: Build web UI
+        working-directory: web_ui
+        run: |
+          npm ci
+          npm run build
 
       - name: Build Rust release
         run: cargo build --release --target ${{ matrix.target }} -p textractor_bridge_server -p textractor_bridge_dll
