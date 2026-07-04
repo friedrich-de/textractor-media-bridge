@@ -65,6 +65,8 @@ Assets are ID-addressed files at:
 
 Periodic cleanup removes expired or storage-cap-excess assets. Lines referencing removed assets are purged with them.
 
+Mining preparation keeps captured line media immutable and creates derived Anki-ready assets on demand. Screenshots are transcoded to JPEG, and ready WAV clips are transcoded or concatenated to one MP3 with FFmpeg before the browser uploads them through AnkiConnect.
+
 ## Media Backends
 
 The server keeps screenshot and audio capture isolated in focused media modules. The current implementation prioritizes a working path:
