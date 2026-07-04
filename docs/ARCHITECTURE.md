@@ -17,6 +17,7 @@ UTF-8 JSON payload
 
 `textractor_bridge_server` owns the durable state and browser API. It runs:
 
+- Windows release tray shell by default, with `--no-tray` for direct server mode
 - Tokio named pipe listener
 - Axum HTTP server
 - SSE live event stream
@@ -75,4 +76,4 @@ The server exposes screenshot and audio backend boundaries matching the specific
 
 ## LAN Mode
 
-By default the server binds to `0.0.0.0:7788`, so the browser UI and API are reachable from the local network at `http://<PC-LAN-IP>:7788/`. Local browser launches use `127.0.0.1` even when the bind address is `0.0.0.0`. At startup the server writes `textractor_bridge_server.session.json` in its working directory with the local URL and phone URL template.
+By default the server binds to `0.0.0.0:7788`, so the browser UI and API are reachable from the local network at `http://<PC-LAN-IP>:7788/`. Local browser launches use `127.0.0.1` even when the bind address is `0.0.0.0`. The Windows tray menu can copy a concrete LAN URL by asking Windows which local IPv4 address would route to the network.

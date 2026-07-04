@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.10"
+version = "0.1.11"
 edition = "2021"
 license = "GPL-3.0-only"
 repository = "https://github.com/friedrich-de/vn-miner"
@@ -34,6 +34,7 @@ toml = "0.8"
 tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tray-icon = { version = "0.24", default-features = false }
 uuid = { version = "1", features = ["serde", "v4"] }
 windows = "0.62"
 windows-sys = "0.61"

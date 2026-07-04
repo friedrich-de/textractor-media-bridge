@@ -29,6 +29,7 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+tray-icon.workspace = true
 wasapi = "0.23"
 windows = { workspace = true, features = [
     "Foundation",
@@ -50,6 +51,9 @@ windows-sys = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

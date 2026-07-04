@@ -45,7 +45,7 @@ fn handle_new_sentence(sentence: *const u16, sentence_info: *const InfoForExtens
         return;
     }
 
-    let text = repair_utf8_mojibake(utf16_ptr_to_string_lossy(sentence));
+    let text = utf16_ptr_to_string_lossy(sentence);
     if text.trim().is_empty() {
         return;
     }
@@ -53,7 +53,7 @@ fn handle_new_sentence(sentence: *const u16, sentence_info: *const InfoForExtens
     let meta = PipeLineMeta {
         process_id: info.process_id,
         thread_number: info.text_number,
-        thread_name: info.text_name,
+        thread_name: None,
         window_title: None,
         is_current_select: info.current_select != 0,
         arch: target_arch(),
@@ -421,63 +421,6 @@ fn utf16_ptr_to_string_lossy(ptr: *const u16) -> String {
     }
 }
 
-fn repair_utf8_mojibake(text: String) -> String {
-    if !looks_like_utf8_as_latin1(&text) {
-        return text;
-    }
-
-    let mut bytes = Vec::with_capacity(text.len());
-    for ch in text.chars() {
-        let value = ch as u32;
-        if value > u8::MAX as u32 {
-            return text;
-        }
-        bytes.push(value as u8);
-    }
-
-    let Ok(candidate) = String::from_utf8(bytes) else {
-        return text;
-    };
-
-    if japanese_score(&candidate) > japanese_score(&text).saturating_add(2) {
-        candidate
-    } else {
-        text
-    }
-}
-
-fn looks_like_utf8_as_latin1(text: &str) -> bool {
-    let marker_count = text
-        .chars()
-        .filter(|ch| {
-            matches!(
-                *ch as u32,
-                0x00e2 | 0x00e3 | 0x00e4 | 0x00e5 | 0x00e6 | 0x00e7 | 0x00e8 | 0x00e9 | 0x00ef
-            )
-        })
-        .count();
-    let control_count = text
-        .chars()
-        .filter(|ch| {
-            let value = *ch as u32;
-            (0x80..=0x9f).contains(&value)
-        })
-        .count();
-    marker_count >= 2 || control_count >= 2
-}
-
-fn japanese_score(text: &str) -> usize {
-    text.chars()
-        .filter(|ch| {
-            let value = *ch as u32;
-            (0x3040..=0x30ff).contains(&value)
-                || (0x3400..=0x9fff).contains(&value)
-                || (0xff00..=0xffef).contains(&value)
-                || (0x3000..=0x303f).contains(&value)
-        })
-        .count()
-}
-
 fn unix_ms_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -504,7 +447,6 @@ mod tests {
             current_select: 1,
             process_id: 12,
             text_number: 2,
-            text_name: None,
         };
         assert!(should_forward(&info));
     }
@@ -515,7 +457,6 @@ mod tests {
             current_select: 0,
             process_id: 12,
             text_number: 2,
-            text_name: None,
         };
         assert!(!should_forward(&info));
         info.current_select = 1;
@@ -523,22 +464,5 @@ mod tests {
         assert!(!should_forward(&info));
         info.text_number = 1;
         assert!(!should_forward(&info));
-    }
-
-    #[test]
-    fn repairs_utf8_bytes_widened_as_latin1() {
-        let expected = "\u{3000}\u{3060}\u{304b}\u{3089}\u{50d5}\u{306f}\n";
-        let mojibake = expected
-            .as_bytes()
-            .iter()
-            .map(|byte| char::from(*byte))
-            .collect::<String>();
-        assert_eq!(repair_utf8_mojibake(mojibake), expected);
-    }
-
-    #[test]
-    fn leaves_valid_japanese_text_alone() {
-        let text = "\u{3000}\u{3060}\u{304b}\u{3089}\u{50d5}\u{306f}\n";
-        assert_eq!(repair_utf8_mojibake(text.to_owned()), text);
     }
 }

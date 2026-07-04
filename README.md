@@ -81,9 +81,13 @@ ffmpeg.exe
 
 ## Run
 
+Debug runs keep normal console behavior:
+
 ```powershell
 cargo run -p textractor_bridge_server -- --open
 ```
+
+Windows release builds start as a notification-area tray app by default. The tray menu can open the local UI, copy the local LAN URL, or quit the server. Use `--no-tray` to run the server without creating a tray icon.
 
 Default UI on the PC:
 
@@ -91,13 +95,11 @@ Default UI on the PC:
 http://127.0.0.1:7788/
 ```
 
-The server binds to `0.0.0.0:7788` by default so the UI is reachable from the local network. For phone/tablet access, replace `<PC-LAN-IP>` with the Windows machine's LAN address:
+The server binds to `0.0.0.0:7788` by default so the UI is reachable from the local network. For phone/tablet access, use the tray menu's `Copy Local LAN URL` action or open:
 
 ```text
 http://<PC-LAN-IP>:7788/
 ```
-
-The x86 install script starts the server hidden and writes `textractor_bridge_server.session.json` in the Textractor folder. That file contains the local URL and phone URL template.
 
 The browser app includes a web app manifest and service worker. Full PWA installation from another device normally requires HTTPS; plain HTTP LAN access is useful for testing and browser use, but mobile install prompts may be unavailable unless the page is served through a trusted HTTPS origin.
 

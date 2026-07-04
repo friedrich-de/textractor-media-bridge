@@ -82,7 +82,7 @@ mod tests {
             meta: PipeLineMeta {
                 process_id: 1234,
                 thread_number: 17,
-                thread_name: Some("hook: dialog".to_owned()),
+                thread_name: None,
                 window_title: Some("Game Window".to_owned()),
                 is_current_select: true,
                 arch: "x64".to_owned(),

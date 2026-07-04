@@ -77,14 +77,15 @@ impl LineRecord {
 }
 
 pub fn source_key(meta: &PipeLineMeta) -> String {
-    format!(
-        "{}:{}",
-        meta.process_id,
-        meta.thread_name
-            .as_deref()
-            .filter(|name| !name.is_empty())
-            .unwrap_or("unknown")
-    )
+    format!("{}:{}", meta.process_id, thread_label(meta))
+}
+
+pub fn thread_label(meta: &PipeLineMeta) -> String {
+    meta.thread_name
+        .as_deref()
+        .filter(|name| !name.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| format!("thread {}", meta.thread_number))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -277,4 +278,25 @@ pub struct AssetBase64Response {
     pub filename: String,
     pub mime_type: String,
     pub data: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thread_label_falls_back_to_thread_number() {
+        let meta = PipeLineMeta {
+            process_id: 1234,
+            thread_number: 17,
+            thread_name: None,
+            window_title: Some("Game Window".to_owned()),
+            is_current_select: true,
+            arch: "x86".to_owned(),
+            source: "textractor".to_owned(),
+        };
+
+        assert_eq!(thread_label(&meta), "thread 17");
+        assert_eq!(source_key(&meta), "1234:thread 17");
+    }
 }

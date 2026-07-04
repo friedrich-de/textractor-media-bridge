@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use bridge_protocol::{
-    AssetInfo, AudioState, LineRecord, MinePrepareRequest, MinePrepareResponse, RangeScreenshotPick,
+    thread_label, AssetInfo, AudioState, LineRecord, MinePrepareRequest, MinePrepareResponse,
+    RangeScreenshotPick,
 };
 
 use crate::assets::resolve_ffmpeg_path;
@@ -46,26 +47,19 @@ impl AppState {
 
         let first = lines.first().expect("non-empty lines");
         let last = lines.last().expect("non-empty lines");
+        let source_thread = thread_label(&first.meta);
         let source = if first.line_id == last.line_id {
             format!(
                 "PID {} / {} / {}",
                 first.meta.process_id,
-                first
-                    .meta
-                    .thread_name
-                    .as_deref()
-                    .unwrap_or("unknown thread"),
+                source_thread,
                 iso_timestamp(first.timestamp_unix_ms)
             )
         } else {
             format!(
                 "PID {} / {} / {} - {}",
                 first.meta.process_id,
-                first
-                    .meta
-                    .thread_name
-                    .as_deref()
-                    .unwrap_or("unknown thread"),
+                source_thread,
                 iso_timestamp(first.timestamp_unix_ms),
                 iso_timestamp(last.timestamp_unix_ms)
             )
@@ -132,6 +126,7 @@ fn iso_timestamp(unix_ms: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::AppConfig;
     use bridge_protocol::{AssetKind, AudioEndReason, LineSeq, PipeLineMeta, RangeScreenshotPick};
 
     #[test]
@@ -194,6 +189,28 @@ mod tests {
             pick_screenshot(&lines, RangeScreenshotPick::Last).map(|asset| asset.asset_id.as_str()),
             Some("second")
         );
+    }
+
+    #[test]
+    fn prepare_mine_uses_thread_number_when_thread_name_is_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut config = AppConfig::default();
+        config.storage.data_dir = Some(tmp.path().to_path_buf());
+        let state = AppState::load(config).unwrap();
+
+        let mut selected = line(1, None);
+        selected.meta.thread_name = None;
+        state.inner.history.upsert(selected).unwrap();
+
+        let response = state
+            .prepare_mine(MinePrepareRequest {
+                line_ids: vec![1],
+                range_sentence_separator: None,
+                range_screenshot_pick: None,
+            })
+            .unwrap();
+
+        assert!(response.source.contains("thread 1"));
     }
 
     fn line(line_seq: LineSeq, audio: Option<AudioState>) -> LineRecord {
