@@ -20,7 +20,10 @@ use tower_http::{cors::CorsLayer, services::ServeDir, trace::TraceLayer};
 use tracing::warn;
 
 use crate::{
-    config::{AppConfig, AudioConfig},
+    config::{
+        AnkiConfig, AppConfig, AssetsConfig, AudioConfig, LinesConfig, MiningConfig, PipeConfig,
+        ScreenshotConfig, ServerConfig, StorageConfig,
+    },
     state::AppState,
 };
 
@@ -39,9 +42,36 @@ struct LinesQuery {
 #[serde(rename_all = "camelCase")]
 struct PublicConfig {
     protocol_version: u32,
-    config: AppConfig,
+    config: PublicAppConfig,
     pipe_name: String,
     data_dir: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicAppConfig {
+    server: ServerConfig,
+    pipe: PipeConfig,
+    screenshot: ScreenshotConfig,
+    audio: AudioConfig,
+    lines: PublicLinesConfig,
+    assets: AssetsConfig,
+    mining: MiningConfig,
+    anki: AnkiConfig,
+    storage: StorageConfig,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublicLinesConfig {
+    join_progressive_text: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EditableConfigRequest {
+    audio: AudioConfig,
+    lines: PublicLinesConfig,
 }
 
 #[derive(Debug, Serialize)]
@@ -60,7 +90,7 @@ struct ClearLinesResponse {
 
 pub fn router(state: AppState) -> Router {
     let api_routes = Router::new()
-        .route("/api/config", get(config))
+        .route("/api/config", get(config).post(update_config))
         .route("/api/config/audio", post(update_audio_config))
         .route("/api/events", get(events))
         .route("/api/lines", get(lines).delete(clear_lines))
@@ -114,12 +144,54 @@ async fn update_audio_config(
     Ok(Json(public_config(&state, config)))
 }
 
+async fn update_config(
+    State(state): State<AppState>,
+    Json(request): Json<EditableConfigRequest>,
+) -> Result<Json<PublicConfig>, ApiError> {
+    let config = state
+        .update_editable_config(request.audio, request.lines.into())
+        .map_err(ApiError::bad_request)?;
+    Ok(Json(public_config(&state, config)))
+}
+
 fn public_config(state: &AppState, config: AppConfig) -> PublicConfig {
     PublicConfig {
         protocol_version: PROTOCOL_VERSION,
-        config,
+        config: config.into(),
         pipe_name: state.pipe_name(),
         data_dir: state.dirs().root.display().to_string(),
+    }
+}
+
+impl From<AppConfig> for PublicAppConfig {
+    fn from(config: AppConfig) -> Self {
+        Self {
+            server: config.server,
+            pipe: config.pipe,
+            screenshot: config.screenshot,
+            audio: config.audio,
+            lines: config.lines.into(),
+            assets: config.assets,
+            mining: config.mining,
+            anki: config.anki,
+            storage: config.storage,
+        }
+    }
+}
+
+impl From<LinesConfig> for PublicLinesConfig {
+    fn from(config: LinesConfig) -> Self {
+        Self {
+            join_progressive_text: config.join_progressive_text,
+        }
+    }
+}
+
+impl From<PublicLinesConfig> for LinesConfig {
+    fn from(config: PublicLinesConfig) -> Self {
+        Self {
+            join_progressive_text: config.join_progressive_text,
+        }
     }
 }
 

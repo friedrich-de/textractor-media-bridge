@@ -181,6 +181,15 @@
                   autocomplete="off"
                 />
               </label>
+
+              <label class="check-field span-two">
+                <input
+                  v-model="localLineConfig.joinProgressiveText"
+                  name="lines_join_progressive_text"
+                  type="checkbox"
+                />
+                <span>Join progressive text updates</span>
+              </label>
             </div>
           </section>
 
@@ -270,7 +279,7 @@ import { computed, reactive, ref } from 'vue';
 import { LoaderCircle, PlugZap, Plus, RefreshCw, RotateCcw, Trash2, X } from '@lucide/vue';
 
 import { getModelsWithFields } from '@/api/ankiConnect';
-import type { AudioConfig } from '@/api/types';
+import type { AudioConfig, LineConfig } from '@/api/types';
 import type { MinerSettings } from '@/lib/minerSettings';
 import { cloneMinerSettings, defaultMinerSettings } from '@/lib/minerSettings';
 import {
@@ -283,14 +292,20 @@ const defaultAudioConfig: AudioConfig = {
   backend: 'auto',
 };
 
+const defaultLineConfig: LineConfig = {
+  joinProgressiveText: true,
+};
+
 const props = defineProps<{
   settings: MinerSettings;
   audioConfig: AudioConfig | null;
+  lineConfig: LineConfig | null;
 }>();
 
 type SettingsSavePayload = {
   settings: MinerSettings;
   audioConfig: AudioConfig;
+  lineConfig: LineConfig;
 };
 
 const emit = defineEmits<{
@@ -303,6 +318,9 @@ type ConnectionStatus = 'untested' | 'testing' | 'connected' | 'error';
 const localSettings = reactive<MinerSettings>(cloneMinerSettings(props.settings));
 const localAudioConfig = reactive<AudioConfig>(
   cloneAudioConfig(props.audioConfig ?? defaultAudioConfig),
+);
+const localLineConfig = reactive<LineConfig>(
+  cloneLineConfig(props.lineConfig ?? defaultLineConfig),
 );
 const connectionStatus = ref<ConnectionStatus>('untested');
 const connectionError = ref<string | null>(null);
@@ -414,6 +432,7 @@ function save(): void {
   emit('save', {
     settings: normalizedSettings,
     audioConfig: normalizeAudioConfig(localAudioConfig),
+    lineConfig: normalizeLineConfig(localLineConfig),
   });
 }
 
@@ -425,5 +444,13 @@ function normalizeAudioConfig(config: AudioConfig): AudioConfig {
   const normalized = cloneAudioConfig(config);
   normalized.backend = normalized.backend || defaultAudioConfig.backend;
   return normalized;
+}
+
+function cloneLineConfig(config: Partial<LineConfig> = {}): LineConfig {
+  return { ...defaultLineConfig, ...config };
+}
+
+function normalizeLineConfig(config: LineConfig): LineConfig {
+  return cloneLineConfig(config);
 }
 </script>

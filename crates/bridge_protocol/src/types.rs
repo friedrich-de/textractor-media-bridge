@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 
 pub type LineId = u64;
 pub type LineSeq = u64;
@@ -105,6 +105,8 @@ pub struct LineUpdatedEvent {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinePatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screenshot: Option<Option<AssetInfo>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -298,5 +300,19 @@ mod tests {
 
         assert_eq!(thread_label(&meta), "thread 17");
         assert_eq!(source_key(&meta), "1234:thread 17");
+    }
+
+    #[test]
+    fn line_patch_serializes_text_patch() {
+        let patch = LinePatch {
+            text: Some("俺はすごい".to_owned()),
+            ..LinePatch::default()
+        };
+
+        let json = serde_json::to_string(&patch).expect("patch serializes");
+
+        assert_eq!(json, r#"{"text":"俺はすごい"}"#);
+        let decoded: LinePatch = serde_json::from_str(&json).expect("patch deserializes");
+        assert_eq!(decoded.text.as_deref(), Some("俺はすごい"));
     }
 }

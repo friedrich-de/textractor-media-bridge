@@ -13,6 +13,7 @@ pub struct AppConfig {
     pub pipe: PipeConfig,
     pub screenshot: ScreenshotConfig,
     pub audio: AudioConfig,
+    pub lines: LinesConfig,
     pub assets: AssetsConfig,
     pub mining: MiningConfig,
     pub anki: AnkiConfig,
@@ -129,6 +130,20 @@ impl Default for AudioConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+pub struct LinesConfig {
+    pub join_progressive_text: bool,
+}
+
+impl Default for LinesConfig {
+    fn default() -> Self {
+        Self {
+            join_progressive_text: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AssetsConfig {
     pub ttl_minutes: u64,
     pub max_storage_mb: u64,
@@ -208,8 +223,17 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["backend"]
         );
+        assert_eq!(
+            value["lines"]
+                .as_table()
+                .unwrap()
+                .keys()
+                .collect::<Vec<_>>(),
+            vec!["join_progressive_text"]
+        );
         assert!(text.contains("range_sentence_separator"));
         assert!(text.contains("audio_bitrate_kbps"));
+        assert!(text.contains("join_progressive_text = true"));
     }
 
     #[test]
@@ -217,5 +241,21 @@ mod tests {
         let config = AppConfig::default();
 
         assert_eq!(config.server.bind, "0.0.0.0:7788");
+    }
+
+    #[test]
+    fn old_config_without_lines_defaults_to_progressive_joining() {
+        let config: AppConfig = toml::from_str(
+            r#"
+            [server]
+            bind = "0.0.0.0:7788"
+
+            [audio]
+            backend = "off"
+            "#,
+        )
+        .expect("old config should parse");
+
+        assert!(config.lines.join_progressive_text);
     }
 }

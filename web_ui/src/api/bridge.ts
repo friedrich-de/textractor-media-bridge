@@ -5,6 +5,7 @@ import type {
   AudioTrimInfoResponse,
   AudioTrimRequest,
   BrowserEventPayload,
+  EditableConfigRequest,
   LineHistoryPage,
   LineId,
   MinePrepareRequest,
@@ -31,6 +32,13 @@ export async function updateAudioConfig(audioConfig: AudioConfig): Promise<Publi
   return apiJson<PublicConfig>('/api/config/audio', {
     method: 'POST',
     body: JSON.stringify(audioConfig),
+  });
+}
+
+export async function updateConfig(config: EditableConfigRequest): Promise<PublicConfig> {
+  return apiJson<PublicConfig>('/api/config', {
+    method: 'POST',
+    body: JSON.stringify(config),
   });
 }
 

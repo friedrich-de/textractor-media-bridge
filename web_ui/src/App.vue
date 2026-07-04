@@ -72,6 +72,7 @@
       v-if="showSettings"
       :settings="settings"
       :audio-config="config?.config.audio ?? null"
+      :line-config="config?.config.lines ?? null"
       @save="saveSettings"
       @cancel="showSettings = false"
     />
@@ -93,8 +94,8 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { ArrowUp, LocateFixed, Settings } from '@lucide/vue';
 
-import { assetUrl, updateAudioConfig } from '@/api/bridge';
-import type { AudioConfig, AudioState, LineId, LineRecord } from '@/api/types';
+import { assetUrl, updateConfig } from '@/api/bridge';
+import type { AudioConfig, AudioState, LineConfig, LineId, LineRecord } from '@/api/types';
 import AudioTrimModal from '@/components/AudioTrimModal.vue';
 import MediaPreviewModal from '@/components/MediaPreviewModal.vue';
 import ReaderView from '@/components/ReaderView.vue';
@@ -121,6 +122,7 @@ type ReaderViewHandle = {
 type SettingsSavePayload = {
   settings: MinerSettings;
   audioConfig: AudioConfig;
+  lineConfig: LineConfig;
 };
 
 const { toasts, toast, dismissToast } = useToast();
@@ -337,7 +339,10 @@ async function saveSettings(payload: SettingsSavePayload): Promise<void> {
   saveMinerSettings(settings.value);
 
   try {
-    config.value = await updateAudioConfig(payload.audioConfig);
+    config.value = await updateConfig({
+      audio: payload.audioConfig,
+      lines: payload.lineConfig,
+    });
     resetTargetPreview();
     showSettings.value = false;
     toast.success('Settings saved.');

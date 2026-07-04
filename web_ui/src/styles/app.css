@@ -722,6 +722,22 @@ select:focus-visible {
   border-color: var(--coral);
 }
 
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.check-field input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--teal);
+}
+
 .field-error {
   color: var(--coral);
   font-size: 0.8rem;

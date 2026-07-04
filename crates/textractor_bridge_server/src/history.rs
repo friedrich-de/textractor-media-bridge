@@ -153,6 +153,10 @@ impl HistoryStore {
         self.lines.read().keys().next_back().copied()
     }
 
+    pub fn newest_line(&self) -> Option<LineRecord> {
+        self.lines.read().values().next_back().cloned()
+    }
+
     pub fn page(
         &self,
         limit: usize,

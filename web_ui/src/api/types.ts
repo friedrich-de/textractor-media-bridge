@@ -74,6 +74,7 @@ export interface LineRecord {
 }
 
 export interface LinePatch {
+  text?: string;
   screenshot?: AssetInfo | null;
   audio?: AudioState | null;
   warnings?: string[];
@@ -93,6 +94,7 @@ export interface AppConfig {
     bind: string;
   };
   audio: AudioConfig;
+  lines: LineConfig;
   anki: {
     range_sentence_separator: string;
     range_screenshot_pick: RangeScreenshotPick;
@@ -101,6 +103,15 @@ export interface AppConfig {
 
 export interface AudioConfig {
   backend: string;
+}
+
+export interface LineConfig {
+  joinProgressiveText: boolean;
+}
+
+export interface EditableConfigRequest {
+  audio: AudioConfig;
+  lines: LineConfig;
 }
 
 export interface PublicConfig {

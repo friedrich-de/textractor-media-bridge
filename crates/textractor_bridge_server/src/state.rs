@@ -12,7 +12,7 @@ use tokio::sync::broadcast;
 
 use crate::{
     assets::AssetStore,
-    config::{AppConfig, AudioConfig},
+    config::{AppConfig, AudioConfig, LinesConfig},
     history::HistoryStore,
     media::{audio::AudioManager, screenshot::ScreenshotManager},
 };
@@ -99,8 +99,18 @@ impl AppState {
     }
 
     pub fn update_audio_config(&self, audio: AudioConfig) -> Result<AppConfig> {
+        let lines = self.config().lines;
+        self.update_editable_config(audio, lines)
+    }
+
+    pub fn update_editable_config(
+        &self,
+        audio: AudioConfig,
+        lines: LinesConfig,
+    ) -> Result<AppConfig> {
         let mut updated = self.config();
         updated.audio = audio.clone();
+        updated.lines = lines;
         updated.save_to_path(&self.inner.config_path)?;
         *self.inner.config.write() = updated.clone();
         self.inner.audio.update_config(audio);

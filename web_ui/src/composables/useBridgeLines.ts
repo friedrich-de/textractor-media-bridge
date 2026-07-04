@@ -162,6 +162,7 @@ export function useBridgeLines(toast: ToastApi) {
 
       return {
         ...line,
+        text: patch.text ?? line.text,
         screenshot: 'screenshot' in patch ? patch.screenshot : line.screenshot,
         audio: 'audio' in patch ? patch.audio : line.audio,
         warnings: patch.warnings ?? line.warnings,
