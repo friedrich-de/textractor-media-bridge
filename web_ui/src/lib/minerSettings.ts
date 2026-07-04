@@ -14,8 +14,13 @@ export interface AnkiSettings {
   rangeScreenshotPick: RangeScreenshotPick;
 }
 
+export interface TextFilterSettings {
+  regexes: string[];
+}
+
 export interface MinerSettings {
   anki: AnkiSettings;
+  textFilters: TextFilterSettings;
 }
 
 const DEFAULT_ANKI_ENDPOINT = 'http://127.0.0.1:8765';
@@ -33,6 +38,9 @@ export const defaultMinerSettings: MinerSettings = {
     maxLatestCardAgeMinutes: 5,
     rangeSentenceSeparator: ' ',
     rangeScreenshotPick: 'last',
+  },
+  textFilters: {
+    regexes: [],
   },
 };
 
@@ -61,10 +69,17 @@ export function cloneMinerSettings(settings: MinerSettings): MinerSettings {
   return JSON.parse(JSON.stringify(settings)) as MinerSettings;
 }
 
-function mergeSettings(settings: { anki?: Partial<AnkiSettings> }): MinerSettings {
+function mergeSettings(settings: {
+  anki?: Partial<AnkiSettings>;
+  textFilters?: Partial<TextFilterSettings>;
+}): MinerSettings {
   const anki = {
     ...defaultMinerSettings.anki,
     ...settings.anki,
+  };
+  const textFilters = {
+    ...defaultMinerSettings.textFilters,
+    ...settings.textFilters,
   };
 
   return {
@@ -80,6 +95,11 @@ function mergeSettings(settings: { anki?: Partial<AnkiSettings> }): MinerSetting
       maxLatestCardAgeMinutes: anki.maxLatestCardAgeMinutes,
       rangeSentenceSeparator: anki.rangeSentenceSeparator,
       rangeScreenshotPick: anki.rangeScreenshotPick,
+    },
+    textFilters: {
+      regexes: Array.isArray(textFilters.regexes)
+        ? textFilters.regexes.filter((pattern): pattern is string => typeof pattern === 'string')
+        : [],
     },
   };
 }

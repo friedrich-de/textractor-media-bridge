@@ -718,6 +718,37 @@ select:focus-visible {
   padding: 0 11px;
 }
 
+.field.compact input[aria-invalid='true'] {
+  border-color: var(--coral);
+}
+
+.field-error {
+  color: var(--coral);
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.regex-filter-list {
+  display: grid;
+  gap: 12px;
+}
+
+.regex-filter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 10px;
+  align-items: end;
+}
+
+.regex-filter-field {
+  min-width: 0;
+}
+
+.icon-button.danger {
+  color: var(--coral);
+}
+
 .span-two {
   grid-column: 1 / -1;
 }

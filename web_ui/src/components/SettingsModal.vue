@@ -186,6 +186,47 @@
 
           <section class="settings-section">
             <div class="section-heading">
+              <h3>Text filters</h3>
+              <button class="secondary-action ghost" type="button" @click="addRegexFilter">
+                <Plus :size="16" />
+                <span>Add</span>
+              </button>
+            </div>
+
+            <div v-if="localSettings.textFilters.regexes.length > 0" class="regex-filter-list">
+              <div
+                v-for="(_regex, index) in localSettings.textFilters.regexes"
+                :key="index"
+                class="regex-filter-row"
+              >
+                <label class="field compact regex-filter-field">
+                  <span>Regex {{ index + 1 }}</span>
+                  <input
+                    v-model="localSettings.textFilters.regexes[index]"
+                    :name="`text_filter_regex_${index}`"
+                    autocomplete="off"
+                    spellcheck="false"
+                    :aria-invalid="Boolean(regexErrors[index])"
+                    @input="clearRegexError(index)"
+                  />
+                  <span v-if="regexErrors[index]" class="field-error">
+                    {{ regexErrors[index] }}
+                  </span>
+                </label>
+                <button
+                  class="icon-button small danger"
+                  type="button"
+                  aria-label="Remove regex filter"
+                  @click="removeRegexFilter(index)"
+                >
+                  <Trash2 :size="16" />
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-heading">
               <h3>Audio capture</h3>
             </div>
 
@@ -226,12 +267,17 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { LoaderCircle, PlugZap, RefreshCw, RotateCcw, X } from '@lucide/vue';
+import { LoaderCircle, PlugZap, Plus, RefreshCw, RotateCcw, Trash2, X } from '@lucide/vue';
 
 import { getModelsWithFields } from '@/api/ankiConnect';
 import type { AudioConfig } from '@/api/types';
 import type { MinerSettings } from '@/lib/minerSettings';
 import { cloneMinerSettings, defaultMinerSettings } from '@/lib/minerSettings';
+import {
+  hasTextFilterErrors,
+  normalizeTextFilterPatterns,
+  validateTextFilterPatterns,
+} from '@/lib/textFilters';
 
 const defaultAudioConfig: AudioConfig = {
   backend: 'auto',
@@ -261,6 +307,7 @@ const localAudioConfig = reactive<AudioConfig>(
 const connectionStatus = ref<ConnectionStatus>('untested');
 const connectionError = ref<string | null>(null);
 const modelsWithFields = ref<Record<string, string[]>>({});
+const regexErrors = ref<Array<string | null>>([]);
 
 const modelNames = computed(() => Object.keys(modelsWithFields.value).sort());
 const availableFields = computed(() => {
@@ -340,9 +387,32 @@ function resetToLapis(): void {
   };
 }
 
+function addRegexFilter(): void {
+  localSettings.textFilters.regexes.push('');
+}
+
+function removeRegexFilter(index: number): void {
+  localSettings.textFilters.regexes.splice(index, 1);
+  regexErrors.value.splice(index, 1);
+}
+
+function clearRegexError(index: number): void {
+  regexErrors.value[index] = null;
+}
+
 function save(): void {
+  regexErrors.value = validateTextFilterPatterns(localSettings.textFilters.regexes);
+  if (hasTextFilterErrors(regexErrors.value)) {
+    return;
+  }
+
+  const normalizedSettings = cloneMinerSettings(localSettings);
+  normalizedSettings.textFilters.regexes = normalizeTextFilterPatterns(
+    normalizedSettings.textFilters.regexes,
+  );
+
   emit('save', {
-    settings: cloneMinerSettings(localSettings),
+    settings: normalizedSettings,
     audioConfig: normalizeAudioConfig(localAudioConfig),
   });
 }

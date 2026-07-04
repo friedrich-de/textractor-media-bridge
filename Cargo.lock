@@ -156,7 +156,7 @@ dependencies = [
 
 [[package]]
 name = "bridge_protocol"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "serde",
  "serde_json",
@@ -1136,7 +1136,7 @@ dependencies = [
 
 [[package]]
 name = "textractor_bridge_dll"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "bridge_protocol",
  "crossbeam-channel",
@@ -1146,7 +1146,7 @@ dependencies = [
 
 [[package]]
 name = "textractor_bridge_server"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "anyhow",
  "async-stream",

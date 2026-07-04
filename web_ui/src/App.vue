@@ -29,13 +29,14 @@
 
     <ReaderView
       ref="readerView"
-      :lines="lines"
-      :latest-line="latestLine"
+      :lines="visibleLines"
+      :latest-line="latestVisibleLine"
       :selected-line-ids="selectedLineIds"
       :status="status"
       :loading="loading"
       :follow="follow"
       :character-count="characterCount"
+      :clearable-line-count="lines.length"
       :clearing-lines="clearingLines"
       @reload="reloadLines"
       @clear-lines="clearLines"
@@ -89,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { ArrowUp, LocateFixed, Settings } from '@lucide/vue';
 
 import { assetUrl, updateAudioConfig } from '@/api/bridge';
@@ -110,6 +111,7 @@ import {
   saveMinerSettings,
   type MinerSettings,
 } from '@/lib/minerSettings';
+import { filterLineRecords } from '@/lib/textFilters';
 
 type ReaderViewHandle = {
   scrollToTop: () => void;
@@ -136,7 +138,6 @@ const {
   lines,
   loading,
   status,
-  latestLine,
   start,
   reloadLines,
   clearLines: clearServerLines,
@@ -146,12 +147,22 @@ const {
   updateLineAudio,
 } = useBridgeLines(toast);
 
-const currentLines = computed(() => lines.value);
-const characterCount = computed(() =>
-  lines.value.reduce((total, line) => total + Array.from(line.text).length, 0),
+const visibleLines = computed(() =>
+  filterLineRecords(lines.value, settings.value.textFilters.regexes),
 );
-const { selectedLineIds, selectedLineCount, selectedLines, toggleLineSelection, clearSelection } =
-  useMiningSelection(currentLines);
+const latestVisibleLine = computed(() => visibleLines.value.at(-1) ?? null);
+const currentLines = computed(() => visibleLines.value);
+const characterCount = computed(() =>
+  visibleLines.value.reduce((total, line) => total + Array.from(line.text).length, 0),
+);
+const {
+  selectedLineIds,
+  selectedLineCount,
+  selectedLines,
+  toggleLineSelection,
+  clearSelection,
+  pruneSelection,
+} = useMiningSelection(currentLines);
 
 const {
   targetCardPreview,
@@ -178,6 +189,10 @@ onMounted(async () => {
   } catch (error) {
     toast.error(error instanceof Error ? error.message : 'Unable to start bridge UI.');
   }
+});
+
+watch(visibleLines, (nextLines) => {
+  pruneSelection(new Set(nextLines.map((line) => line.lineId)));
 });
 
 async function copyLine(line: LineRecord): Promise<void> {

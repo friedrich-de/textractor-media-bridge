@@ -12,6 +12,7 @@ import type { LineRecord, MinePrepareResponse } from '@/api/types';
 import type { ToastApi } from '@/composables/useToast';
 import { preserveHtmlTags, stripHtml } from '@/lib/htmlTags';
 import type { MinerSettings } from '@/lib/minerSettings';
+import { buildFilteredSentence } from '@/lib/textFilters';
 
 interface UseAnkiMiningOptions {
   settings: Ref<MinerSettings>;
@@ -57,11 +58,18 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
       throw new Error('No text rows selected.');
     }
 
-    return prepareMine({
+    const prepared = await prepareMine({
       lineIds,
       rangeSentenceSeparator: options.settings.value.anki.rangeSentenceSeparator,
       rangeScreenshotPick: options.settings.value.anki.rangeScreenshotPick,
     });
+    return {
+      ...prepared,
+      sentence: buildFilteredSentence(
+        options.selectedLines.value,
+        options.settings.value.anki.rangeSentenceSeparator,
+      ),
+    };
   }
 
   async function sendSelectionToAnki(): Promise<void> {

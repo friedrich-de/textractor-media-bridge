@@ -32,7 +32,7 @@
         <button
           class="secondary-action danger compact-text-action"
           type="button"
-          :disabled="lines.length === 0 || clearingLines"
+          :disabled="clearableLineCount === 0 || clearingLines"
           aria-label="Clear transcript lines"
           @click="emit('clearLines')"
         >
@@ -84,6 +84,7 @@ const props = defineProps<{
   loading: boolean;
   follow: boolean;
   characterCount: number;
+  clearableLineCount: number;
   clearingLines: boolean;
 }>();
 

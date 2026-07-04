@@ -26,6 +26,13 @@ export function useMiningSelection(lines: ComputedRef<readonly LineRecord[]>) {
     selectedLineIds.value = new Set();
   }
 
+  function pruneSelection(validLineIds: ReadonlySet<LineId>): void {
+    const next = new Set([...selectedLineIds.value].filter((lineId) => validLineIds.has(lineId)));
+    if (next.size !== selectedLineIds.value.size) {
+      selectedLineIds.value = next;
+    }
+  }
+
   return {
     selectedLineIds,
     selectedLineIdList,
@@ -34,6 +41,7 @@ export function useMiningSelection(lines: ComputedRef<readonly LineRecord[]>) {
     selectedRange,
     toggleLineSelection,
     clearSelection,
+    pruneSelection,
   };
 }
 
