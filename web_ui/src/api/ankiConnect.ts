@@ -1,4 +1,5 @@
 const API_VERSION = 6;
+const MAX_RECENT_NOTE_CANDIDATES = 50;
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
@@ -59,17 +60,25 @@ export async function getModelsWithFields(endpoint: string): Promise<Record<stri
 
 export async function getLatestNote(
   endpoint: string,
-  options: { deckName: string; modelName: string; searchDays?: number },
+  options: { modelName: string; searchDays?: number; requiredFields?: readonly string[] },
 ): Promise<NoteInfo | null> {
-  const query = buildNoteQuery(options.deckName, options.modelName, options.searchDays ?? 7);
+  const query = buildNoteQuery(options.modelName, options.searchDays ?? 7);
   const noteIds = await invoke<number[]>(endpoint, 'findNotes', { query });
   if (noteIds.length === 0) {
     return null;
   }
 
-  const latest = [...noteIds].sort((a, b) => b - a)[0];
-  const notes = await invoke<NoteInfo[]>(endpoint, 'notesInfo', { notes: [latest] });
-  return notes[0] ?? null;
+  const candidates = [...noteIds].sort((a, b) => b - a).slice(0, MAX_RECENT_NOTE_CANDIDATES);
+  const notes = await invoke<NoteInfo[]>(endpoint, 'notesInfo', { notes: candidates });
+  const requiredFields = normalizeRequiredFields(options.requiredFields ?? []);
+  return (
+    [...notes]
+      .sort((a, b) => b.noteId - a.noteId)
+      .find(
+        (note) =>
+          note.modelName === options.modelName && noteHasRequiredFields(note, requiredFields),
+      ) ?? null
+  );
 }
 
 export async function storeMediaFile(
@@ -94,12 +103,8 @@ export async function guiBrowse(endpoint: string, query: string): Promise<number
   return invoke<number[]>(endpoint, 'guiBrowse', { query });
 }
 
-function buildNoteQuery(deckName: string, modelName: string, searchDays: number): string {
+function buildNoteQuery(modelName: string, searchDays: number): string {
   const parts = [`added:${Math.max(1, Math.floor(searchDays))}`];
-  const deckQuery = searchQualifier('deck', deckName);
-  if (deckQuery) {
-    parts.unshift(deckQuery);
-  }
   const modelQuery = searchQualifier('note', modelName);
   if (modelQuery) {
     parts.unshift(modelQuery);
@@ -114,6 +119,15 @@ function searchQualifier(name: string, value: string): string | null {
   }
 
   return /^[^\s"]+$/.test(trimmed) ? `${name}:${trimmed}` : `${name}:"${trimmed}"`;
+}
+
+function normalizeRequiredFields(fields: readonly string[]): string[] {
+  return [...new Set(fields.map((field) => field.trim()).filter(Boolean))];
+}
+
+function noteHasRequiredFields(note: NoteInfo, requiredFields: readonly string[]): boolean {
+  const noteFields = new Set(Object.keys(note.fields));
+  return requiredFields.every((field) => noteFields.has(field));
 }
 
 async function invoke<T>(endpoint: string, action: string, params?: JsonValue): Promise<T> {

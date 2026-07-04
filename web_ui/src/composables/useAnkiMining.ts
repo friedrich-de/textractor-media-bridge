@@ -31,7 +31,7 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
 
   const ankiConfigured = computed(() => {
     const anki = options.settings.value.anki;
-    return Boolean(anki.modelName && (anki.sentenceField || anki.audioField || anki.imageField));
+    return Boolean(anki.modelName && configuredUpdateFields(anki).length > 0);
   });
   const canSendToAnki = computed(
     () => options.selectedLineCount.value > 0 && ankiConfigured.value && !sendingToAnki.value,
@@ -41,9 +41,12 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
     [
       options.selectedLineCount,
       () => options.settings.value.anki.endpoint,
-      () => options.settings.value.anki.deckName,
       () => options.settings.value.anki.modelName,
       () => options.settings.value.anki.frontField,
+      () => options.settings.value.anki.sentenceField,
+      () => options.settings.value.anki.audioField,
+      () => options.settings.value.anki.imageField,
+      () => options.settings.value.anki.sourceField,
       () => options.settings.value.anki.maxLatestCardAgeMinutes,
     ],
     () => {
@@ -130,8 +133,8 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
     loadingTargetCard.value = true;
     try {
       const note = await getLatestNote(options.settings.value.anki.endpoint, {
-        deckName: options.settings.value.anki.deckName,
         modelName: options.settings.value.anki.modelName,
+        requiredFields: configuredUpdateFields(options.settings.value.anki),
       });
       if (requestId !== previewRequestId) {
         return;
@@ -165,8 +168,8 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
   async function updateLatestNote(prepared: MinePrepareResponse): Promise<number> {
     const anki = options.settings.value.anki;
     const note = await getLatestNote(anki.endpoint, {
-      deckName: anki.deckName,
       modelName: anki.modelName,
+      requiredFields: configuredUpdateFields(anki),
     });
     if (!note || latestNoteTooOld(note, anki.maxLatestCardAgeMinutes)) {
       throw new Error('No recent Anki note found.');
@@ -235,6 +238,12 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
 
 function latestNoteTooOld(note: NoteInfo, maxAgeMinutes: number): boolean {
   return maxAgeMinutes > 0 && Date.now() - note.noteId > maxAgeMinutes * 60_000;
+}
+
+function configuredUpdateFields(anki: MinerSettings['anki']): string[] {
+  return [anki.sentenceField, anki.audioField, anki.imageField, anki.sourceField].filter(
+    (field): field is string => field.trim().length > 0,
+  );
 }
 
 function noteFieldValue(note: NoteInfo, fieldName: string): string {

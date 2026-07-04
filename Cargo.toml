@@ -10,7 +10,7 @@ resolver = "2"
 version = "0.1.15"
 edition = "2021"
 license = "GPL-3.0-only"
-repository = "https://github.com/friedrich-de/vn-miner"
+repository = "https://github.com/friedrich-de/textractor-media-bridge"
 
 [workspace.dependencies]
 anyhow = "1"

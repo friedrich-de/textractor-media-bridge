@@ -2,7 +2,6 @@ import type { RangeScreenshotPick } from '@/api/types';
 
 export interface AnkiSettings {
   endpoint: string;
-  deckName: string;
   modelName: string;
   frontField: string;
   sentenceField: string;
@@ -29,7 +28,6 @@ const DEFAULT_ANKI_ENDPOINT = 'http://127.0.0.1:8765';
 export const defaultMinerSettings: MinerSettings = {
   anki: {
     endpoint: DEFAULT_ANKI_ENDPOINT,
-    deckName: 'Mining',
     modelName: 'Lapis',
     frontField: 'Expression',
     sentenceField: 'Sentence',
@@ -87,7 +85,6 @@ function mergeSettings(settings: {
   return {
     anki: {
       endpoint: normalizeAnkiEndpoint(anki.endpoint),
-      deckName: anki.deckName,
       modelName: anki.modelName,
       frontField: anki.frontField,
       sentenceField: anki.sentenceField,

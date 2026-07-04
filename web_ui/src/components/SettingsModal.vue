@@ -69,11 +69,6 @@
 
             <div class="settings-grid">
               <label class="field compact">
-                <span>Deck</span>
-                <input v-model="localSettings.anki.deckName" name="anki_deck" autocomplete="off" />
-              </label>
-
-              <label class="field compact">
                 <span>Note type</span>
                 <select
                   v-model="localSettings.anki.modelName"
@@ -410,7 +405,6 @@ function resetToLapis(): void {
     ...localSettings.anki,
     ...defaultMinerSettings.anki,
     endpoint: localSettings.anki.endpoint,
-    deckName: localSettings.anki.deckName,
   };
 }
 
