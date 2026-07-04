@@ -24,7 +24,9 @@ use windows_sys::Win32::{
     },
 };
 
-use crate::{local_lan_url, open_browser, run_server_thread, PreparedServer};
+use crate::{
+    local_lan_url, localhost_endpoint_label, open_browser, run_server_thread, PreparedServer,
+};
 
 const ICON_BYTES: &[u8] = include_bytes!("../../../web_ui/public/favicon.png");
 const OPEN_UI_ID: &str = "open_web_ui";
@@ -48,7 +50,8 @@ struct TrayApp {
 pub(crate) fn run(prepared: PreparedServer) -> Result<()> {
     let local_url = prepared.local_url.clone();
     let bind_addr = prepared.bind_addr;
-    let tray_app = TrayApp::new()?;
+    let tooltip = tray_tooltip(&prepared);
+    let tray_app = TrayApp::new(&tooltip)?;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     let server_handle = thread::spawn(move || run_server_thread(prepared, shutdown_rx));
@@ -57,7 +60,7 @@ pub(crate) fn run(prepared: PreparedServer) -> Result<()> {
 }
 
 impl TrayApp {
-    fn new() -> Result<Self> {
+    fn new(tooltip: &str) -> Result<Self> {
         let menu = Menu::new();
         let open_ui = MenuItem::with_id(OPEN_UI_ID, "Open Web UI", true, None);
         let copy_lan_url = MenuItem::with_id(COPY_LAN_URL_ID, "Copy Local LAN URL", true, None);
@@ -66,7 +69,7 @@ impl TrayApp {
             .context("failed to build tray menu")?;
 
         let tray_icon = TrayIconBuilder::new()
-            .with_tooltip("Textractor Media Bridge")
+            .with_tooltip(tooltip)
             .with_icon(load_icon()?)
             .with_menu(Box::new(menu))
             .with_menu_on_left_click(false)
@@ -80,6 +83,15 @@ impl TrayApp {
             _quit: quit,
         })
     }
+}
+
+fn tray_tooltip(prepared: &PreparedServer) -> String {
+    let http = format!("UI {}", localhost_endpoint_label(prepared.bind_addr));
+    let websocket = prepared
+        .websocket_bind_addr
+        .map(|addr| format!("WS {}", localhost_endpoint_label(addr)))
+        .unwrap_or_else(|| "WebSocket unavailable".to_owned());
+    format!("{http}\n{websocket}")
 }
 
 fn load_icon() -> Result<Icon> {

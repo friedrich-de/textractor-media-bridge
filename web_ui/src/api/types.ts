@@ -91,6 +91,10 @@ export interface AppConfig {
   server: {
     bind: string;
   };
+  websocket: {
+    enabled: boolean;
+    bind: string;
+  };
   audio: AudioConfig;
   lines: LineConfig;
   anki: {

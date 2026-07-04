@@ -1,7 +1,7 @@
 # Architecture
 
 ```text
-Textractor DLL -> Windows named pipe -> Rust server -> HTTP/SSE -> Browser UI -> AnkiConnect
+Textractor DLL -> Windows named pipe -> Rust server -> HTTP/SSE + WebSocket -> Browser UI / external clients -> AnkiConnect
 ```
 
 ## Crates
@@ -13,7 +13,7 @@ Textractor DLL -> Windows named pipe -> Rust server -> HTTP/SSE -> Browser UI ->
 UTF-8 JSON payload
 ```
 
-`textractor_bridge_dll` exports `OnNewSentence`, parses Textractor `InfoForExtension`, filters to the selected real text thread, and enqueues compact line events to a background named-pipe worker. The callback returns the original UTF-16 sentence pointer and wraps runtime work in `catch_unwind`.
+`textractor_bridge_dll` exports `OnNewSentence`, parses Textractor `InfoForExtension`, filters to the selected real text thread, and writes compact line events to the named pipe with one short-lived connection per forwarded line. The callback returns the original UTF-16 sentence pointer and wraps runtime work in `catch_unwind`.
 
 `textractor_bridge_server` owns the durable state and browser API. It runs:
 
@@ -21,6 +21,7 @@ UTF-8 JSON payload
 - Tokio named pipe listener
 - Axum HTTP server
 - SSE live event stream
+- Plain-text WebSocket compatibility stream starting at port `6677` and counting upward until a free port is found
 - Append-only JSONL line history
 - Asset storage and cleanup
 - Process-to-window resolution
@@ -48,6 +49,22 @@ GET  /assets/{asset_id}
 ```
 
 SSE events use `id: <lineSeq>` so native `EventSource` reconnect can resume with `Last-Event-ID`. The UI also performs an `afterSeq` history fetch fallback.
+
+## WebSocket Compatibility
+
+The server also exposes a live WebSocket stream compatible with `textractor_websocket`:
+
+```text
+ws://localhost:6677/
+```
+
+If port `6677` is already in use, the server automatically tries `6678`, then keeps counting upward until it finds a free port:
+
+```text
+ws://localhost:6678/
+```
+
+On Windows, the server makes one best-effort cleanup attempt for listener processes occupying `6677` or `6678`, then retries those ports before moving on. Messages are plain text Textractor sentences, not JSON. The stream is live-only and does not replay history when a client connects. This WebSocket server is part of `textractor_bridge_server`, not the Textractor extension DLL, so there is no long-lived WebSocket connection or worker thread inside Textractor. The tray tooltip shows the actual selected port.
 
 ## Persistence
 
@@ -78,4 +95,4 @@ The server keeps screenshot and audio capture isolated in focused media modules.
 
 ## LAN Mode
 
-By default the server binds to `0.0.0.0:7788`, so the browser UI and API are reachable from the local network at `http://<PC-LAN-IP>:7788/`. Local browser launches use `127.0.0.1` even when the bind address is `0.0.0.0`. The Windows tray menu can copy a concrete LAN URL by asking Windows which local IPv4 address would route to the network.
+By default the HTTP server binds to `0.0.0.0:7788`, so the browser UI and API are reachable from the local network at `http://<PC-LAN-IP>:7788/`. The WebSocket compatibility server starts at `0.0.0.0:6677` by default and increments the port until it can bind. Local browser launches use `127.0.0.1` for HTTP even when the bind address is `0.0.0.0`. The Windows tray menu can copy a concrete LAN URL by asking Windows which local IPv4 address would route to the network.

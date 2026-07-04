@@ -45,7 +45,7 @@ text number != 1
 
 ## Running
 
-Windows release builds start as a notification-area tray app by default. The tray menu can open the local UI, copy the local LAN URL, or quit the server.
+Windows release builds start as a notification-area tray app by default. The tray menu can open the local UI, copy the local LAN URL, or quit the server. The tray tooltip shows both the browser server and the WebSocket compatibility server.
 
 Default UI on the PC:
 
@@ -60,6 +60,22 @@ http://<PC-LAN-IP>:7788/
 ```
 
 The browser app includes a web app manifest and service worker. Full PWA installation from another device normally requires HTTPS; plain HTTP LAN access is useful for testing and browser use, but mobile install prompts may be unavailable unless the page is served through a trusted HTTPS origin.
+
+## WebSocket Compatibility
+
+The server exposes a plain-text WebSocket stream compatible with `textractor_websocket`:
+
+```text
+ws://localhost:6677/
+```
+
+If port `6677` is already occupied, the bridge automatically tries `6678`, then keeps counting upward until it finds a free port:
+
+```text
+ws://localhost:6678/
+```
+
+On Windows, the bridge makes one best-effort attempt to terminate listener processes occupying `6677` or `6678`, then retries those ports before moving on. Messages are live Textractor sentence text only. The tray tooltip shows the actual selected WebSocket port. Do not run the old `textractor_websocket` extension at the same time unless clients are intentionally using different ports.
 
 ## Anki Mining
 

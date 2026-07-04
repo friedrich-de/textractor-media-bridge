@@ -57,6 +57,8 @@ impl AppState {
             return Ok(None);
         }
 
+        self.broadcast_websocket_text(event.text.clone());
+
         if let Some(line) = self.try_join_progressive_line(&event)? {
             return Ok(Some(line));
         }
@@ -338,6 +340,57 @@ mod tests {
         assert_eq!(lines[0].line_id, first.line_id);
         assert_eq!(lines[0].timestamp_unix_ms, 10_000);
         assert_eq!(lines[0].text, "俺はすごい");
+    }
+
+    #[tokio::test]
+    async fn accepted_line_events_broadcast_plain_websocket_text() {
+        let (_tmp, state) = test_state(true, "off");
+        let mut websocket_text = state.subscribe_websocket_text();
+
+        state
+            .ingest_pipe_line(event(1, 10_000, "raw textractor text", 7, 2))
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(websocket_text.recv().await.unwrap(), "raw textractor text");
+    }
+
+    #[tokio::test]
+    async fn progressive_updates_broadcast_each_raw_websocket_text() {
+        let (_tmp, state) = test_state(true, "off");
+        let mut websocket_text = state.subscribe_websocket_text();
+
+        let first = state
+            .ingest_pipe_line(event(1, 10_000, "俺は", 7, 2))
+            .await
+            .unwrap()
+            .unwrap();
+        let joined = state
+            .ingest_pipe_line(event(2, 11_000, "俺はすごい", 7, 2))
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(first.line_id, joined.line_id);
+        assert_eq!(state.inner.history.all_lines().len(), 1);
+        assert_eq!(websocket_text.recv().await.unwrap(), "俺は");
+        assert_eq!(websocket_text.recv().await.unwrap(), "俺はすごい");
+    }
+
+    #[tokio::test]
+    async fn invalid_pipe_events_do_not_broadcast_websocket_text() {
+        let (_tmp, state) = test_state(true, "off");
+        let mut websocket_text = state.subscribe_websocket_text();
+        let mut invalid = event(1, 10_000, "ignored", 7, 2);
+        invalid.protocol_version = 0;
+
+        assert!(state.ingest_pipe_line(invalid).await.unwrap().is_none());
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(25), websocket_text.recv())
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

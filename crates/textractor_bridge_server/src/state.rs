@@ -41,6 +41,7 @@ struct AppStateInner {
     screenshots: ScreenshotManager,
     audio: AudioManager,
     events: broadcast::Sender<SseMessage>,
+    websocket_text: broadcast::Sender<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,6 +83,7 @@ impl AppState {
         let screenshots = ScreenshotManager::new(config.screenshot.backend.clone());
         let audio = AudioManager::new(config.audio.clone());
         let (events, _) = broadcast::channel(512);
+        let (websocket_text, _) = broadcast::channel(512);
 
         Ok(Self {
             inner: Arc::new(AppStateInner {
@@ -93,6 +95,7 @@ impl AppState {
                 screenshots,
                 audio,
                 events,
+                websocket_text,
             }),
         })
     }
@@ -130,6 +133,14 @@ impl AppState {
 
     pub fn subscribe(&self) -> broadcast::Receiver<SseMessage> {
         self.inner.events.subscribe()
+    }
+
+    pub fn subscribe_websocket_text(&self) -> broadcast::Receiver<String> {
+        self.inner.websocket_text.subscribe()
+    }
+
+    fn broadcast_websocket_text(&self, text: String) {
+        let _ = self.inner.websocket_text.send(text);
     }
 
     fn broadcast_line_update(&self, line_seq: LineSeq, line_id: LineId, patch: LinePatch) {

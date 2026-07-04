@@ -22,7 +22,7 @@ use tracing::warn;
 use crate::{
     config::{
         AnkiConfig, AppConfig, AssetsConfig, AudioConfig, LinesConfig, MiningConfig, PipeConfig,
-        ScreenshotConfig, ServerConfig, StorageConfig,
+        ScreenshotConfig, ServerConfig, StorageConfig, WebSocketConfig,
     },
     state::AppState,
 };
@@ -50,6 +50,7 @@ struct PublicConfig {
 #[serde(rename_all = "camelCase")]
 struct PublicAppConfig {
     server: ServerConfig,
+    websocket: WebSocketConfig,
     pipe: PipeConfig,
     screenshot: ScreenshotConfig,
     audio: AudioConfig,
@@ -163,6 +164,7 @@ impl From<AppConfig> for PublicAppConfig {
     fn from(config: AppConfig) -> Self {
         Self {
             server: config.server,
+            websocket: config.websocket,
             pipe: config.pipe,
             screenshot: config.screenshot,
             audio: config.audio,

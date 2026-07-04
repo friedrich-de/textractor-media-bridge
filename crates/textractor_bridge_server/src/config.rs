@@ -10,6 +10,7 @@ use std::{
 #[serde(default)]
 pub struct AppConfig {
     pub server: ServerConfig,
+    pub websocket: WebSocketConfig,
     pub pipe: PipeConfig,
     pub screenshot: ScreenshotConfig,
     pub audio: AudioConfig,
@@ -70,6 +71,13 @@ impl AppConfig {
             .parse()
             .unwrap_or_else(|_| SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 7788))
     }
+
+    pub fn websocket_bind_addr(&self) -> SocketAddr {
+        self.websocket
+            .bind
+            .parse()
+            .unwrap_or_else(|_| SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 6677))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +90,22 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             bind: "0.0.0.0:7788".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WebSocketConfig {
+    pub bind: String,
+    pub enabled: bool,
+}
+
+impl Default for WebSocketConfig {
+    fn default() -> Self {
+        Self {
+            bind: "0.0.0.0:6677".to_owned(),
+            enabled: true,
         }
     }
 }
@@ -216,6 +240,14 @@ mod tests {
             vec!["bind"]
         );
         assert_eq!(
+            value["websocket"]
+                .as_table()
+                .unwrap()
+                .keys()
+                .collect::<Vec<_>>(),
+            vec!["bind", "enabled"]
+        );
+        assert_eq!(
             value["audio"]
                 .as_table()
                 .unwrap()
@@ -234,6 +266,9 @@ mod tests {
         assert!(text.contains("range_sentence_separator"));
         assert!(text.contains("audio_bitrate_kbps"));
         assert!(text.contains("join_progressive_text = true"));
+        assert!(text.contains("[websocket]"));
+        assert!(text.contains("enabled = true"));
+        assert!(text.contains("bind = \"0.0.0.0:6677\""));
     }
 
     #[test]
@@ -241,6 +276,8 @@ mod tests {
         let config = AppConfig::default();
 
         assert_eq!(config.server.bind, "0.0.0.0:7788");
+        assert!(config.websocket.enabled);
+        assert_eq!(config.websocket.bind, "0.0.0.0:6677");
     }
 
     #[test]
