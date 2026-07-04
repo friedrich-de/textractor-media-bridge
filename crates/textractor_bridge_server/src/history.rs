@@ -7,7 +7,9 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
+    time::{SystemTime, UNIX_EPOCH},
 };
+use tracing::warn;
 
 #[derive(Debug, thiserror::Error)]
 pub enum HistoryError {
@@ -15,6 +17,12 @@ pub enum HistoryError {
     Io(#[from] std::io::Error),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("invalid history entry on line {line_number}: {source}")]
+    InvalidEntry {
+        line_number: usize,
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -34,28 +42,23 @@ pub struct HistoryStore {
 
 impl HistoryStore {
     pub fn load(path: PathBuf) -> Result<Self, HistoryError> {
-        let mut lines = BTreeMap::new();
-        if path.exists() {
-            let reader = BufReader::new(File::open(&path)?);
-            for line in reader.lines() {
-                let line = line?;
-                if line.trim().is_empty() {
-                    continue;
-                }
-                match serde_json::from_str::<HistoryOp>(&line)? {
-                    HistoryOp::Upsert { line } => {
-                        let line = *line;
-                        lines.insert(line.line_seq, line);
-                    }
-                    HistoryOp::Purge { line_id } => {
-                        lines.retain(|_, line| line.line_id != line_id);
-                    }
-                    HistoryOp::Clear => {
-                        lines.clear();
-                    }
-                }
+        let lines = match load_history_lines(&path) {
+            Ok(lines) => lines,
+            Err(HistoryError::InvalidEntry {
+                line_number,
+                source,
+            }) => {
+                warn!(
+                    path = %path.display(),
+                    line_number,
+                    %source,
+                    "history file is incompatible or corrupt; quarantining and starting empty"
+                );
+                quarantine_invalid_history(&path);
+                BTreeMap::new()
             }
-        }
+            Err(error) => return Err(error),
+        };
 
         let next = lines.keys().next_back().copied().unwrap_or(0) + 1;
         Ok(Self {
@@ -252,6 +255,57 @@ impl HistoryStore {
     }
 }
 
+fn load_history_lines(path: &Path) -> Result<BTreeMap<LineSeq, LineRecord>, HistoryError> {
+    let mut lines = BTreeMap::new();
+    if path.exists() {
+        let reader = BufReader::new(File::open(path)?);
+        for (index, line) in reader.lines().enumerate() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            match serde_json::from_str::<HistoryOp>(&line).map_err(|source| {
+                HistoryError::InvalidEntry {
+                    line_number: index + 1,
+                    source,
+                }
+            })? {
+                HistoryOp::Upsert { line } => {
+                    let line = *line;
+                    lines.insert(line.line_seq, line);
+                }
+                HistoryOp::Purge { line_id } => {
+                    lines.retain(|_, line| line.line_id != line_id);
+                }
+                HistoryOp::Clear => {
+                    lines.clear();
+                }
+            }
+        }
+    }
+
+    Ok(lines)
+}
+
+fn quarantine_invalid_history(path: &Path) {
+    if !path.exists() {
+        return;
+    }
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let quarantine_path = path.with_file_name(format!("history.invalid.{timestamp_ms}.jsonl"));
+    if let Err(error) = std::fs::rename(path, &quarantine_path) {
+        warn!(
+            %error,
+            path = %path.display(),
+            quarantine = %quarantine_path.display(),
+            "failed to quarantine invalid history file; continuing with empty history"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,6 +331,20 @@ mod tests {
             warnings: vec![],
             ignored: false,
         }
+    }
+
+    fn invalid_history_files(dir: &Path) -> Vec<PathBuf> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| {
+                        name.starts_with("history.invalid.") && name.ends_with(".jsonl")
+                    })
+            })
+            .collect()
     }
 
     #[test]
@@ -324,5 +392,37 @@ mod tests {
 
         let reloaded = HistoryStore::load(path).unwrap();
         assert!(reloaded.all_lines().is_empty());
+    }
+
+    #[test]
+    fn incompatible_history_is_quarantined_and_starts_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("history.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"op":"upsert","line":{"lineId":1,"lineSeq":1,"timestampUnixMs":1000,"text":"old","meta":{"processId":1,"threadNumber":2,"isCurrentSelect":true,"arch":"x86","source":"textractor"},"audio":{"status":"ready","asset":{"assetId":"asset_old","kind":"audio","mimeType":"audio/wav","url":"/api/assets/asset_old","durationMs":100,"createdUnixMs":1000,"byteSize":44},"durationMs":100,"endReason":"silence"}}}"#,
+        )
+        .unwrap();
+
+        let store = HistoryStore::load(path.clone()).unwrap();
+
+        assert!(store.all_lines().is_empty());
+        assert!(!path.exists());
+        let quarantined = invalid_history_files(tmp.path());
+        assert_eq!(quarantined.len(), 1);
+    }
+
+    #[test]
+    fn malformed_history_is_quarantined_and_starts_empty() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("history.jsonl");
+        std::fs::write(&path, "{not json}\n").unwrap();
+
+        let store = HistoryStore::load(path.clone()).unwrap();
+
+        assert!(store.all_lines().is_empty());
+        assert!(!path.exists());
+        let quarantined = invalid_history_files(tmp.path());
+        assert_eq!(quarantined.len(), 1);
     }
 }

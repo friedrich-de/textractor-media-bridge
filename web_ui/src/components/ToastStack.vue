@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { X } from 'lucide-vue-next';
+import { X } from '@lucide/vue';
 
 import type { Toast } from '@/composables/useToast';
 

@@ -148,7 +148,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { LoaderCircle, Pause, Play, RotateCcw, Save, X } from 'lucide-vue-next';
+import { LoaderCircle, Pause, Play, RotateCcw, Save, X } from '@lucide/vue';
 
 import { applyAudioTrim } from '@/api/bridge';
 import type { AudioState, AudioTrimInfoResponse, LineId, LineRecord } from '@/api/types';

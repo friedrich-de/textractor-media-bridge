@@ -24,7 +24,7 @@ UTF-8 JSON payload
 - Append-only JSONL line history
 - Asset storage and cleanup
 - Process-to-window resolution
-- Screenshot/audio backend boundaries
+- Screenshot/audio media modules
 
 `web_ui` is a Vite/Vue/TypeScript app modeled after Jellyfin Miner. It loads history through `GET /api/lines`, receives live updates through `EventSource`, presents one Textractor transcript as the source of truth, supports contiguous line selection, and calls AnkiConnect from the browser. Release builds embed `web_ui/dist` into the Rust server; frontend development can still override this with `TEXTRACTOR_MEDIA_BRIDGE_WEB_UI`.
 
@@ -67,7 +67,7 @@ Periodic cleanup removes expired or storage-cap-excess assets. Lines referencing
 
 ## Media Backends
 
-The server exposes screenshot and audio backend boundaries matching the specification. The current implementation prioritizes a working MVP path:
+The server keeps screenshot and audio capture isolated in focused media modules. The current implementation prioritizes a working path:
 
 - Process window resolution uses `EnumWindows`, `GetWindowThreadProcessId`, `IsWindowVisible`, DWM cloaking checks, root-owner preference, foreground preference, and largest-window fallback.
 - Screenshot capture uses Windows Graphics Capture for target windows in `auto` mode, validates the first frame, falls back to Win32 GDI `BitBlt` when WGC is unavailable or suspicious, and stores PNG assets.

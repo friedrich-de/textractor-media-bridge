@@ -93,7 +93,7 @@ import {
   Scissors,
   Volume2,
   VolumeX,
-} from 'lucide-vue-next';
+} from '@lucide/vue';
 
 import type { LineId, LineRecord } from '@/api/types';
 

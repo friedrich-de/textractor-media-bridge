@@ -226,7 +226,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { LoaderCircle, PlugZap, RefreshCw, RotateCcw, X } from 'lucide-vue-next';
+import { LoaderCircle, PlugZap, RefreshCw, RotateCcw, X } from '@lucide/vue';
 
 import { getModelsWithFields } from '@/api/ankiConnect';
 import type { AudioConfig } from '@/api/types';

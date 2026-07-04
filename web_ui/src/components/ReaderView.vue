@@ -65,7 +65,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Clock3, Gamepad2, LoaderCircle, LocateFixed, RefreshCw, Trash2 } from 'lucide-vue-next';
+import { Clock3, Gamepad2, LoaderCircle, LocateFixed, RefreshCw, Trash2 } from '@lucide/vue';
 
 import type { LiveStatus } from '@/composables/useBridgeLines';
 import type { LineId, LineRecord } from '@/api/types';

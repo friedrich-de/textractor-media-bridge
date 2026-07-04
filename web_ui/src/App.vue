@@ -90,7 +90,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { ArrowUp, LocateFixed, Settings } from 'lucide-vue-next';
+import { ArrowUp, LocateFixed, Settings } from '@lucide/vue';
 
 import { assetUrl, updateAudioConfig } from '@/api/bridge';
 import type { AudioConfig, AudioState, LineId, LineRecord } from '@/api/types';

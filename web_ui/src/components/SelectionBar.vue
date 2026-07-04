@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { Image as ImageIcon, LoaderCircle, Send, Settings, Volume2, X } from 'lucide-vue-next';
+import { Image as ImageIcon, LoaderCircle, Send, Settings, Volume2, X } from '@lucide/vue';
 
 defineProps<{
   selectedCount: number;

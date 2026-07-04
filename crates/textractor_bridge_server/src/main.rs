@@ -14,7 +14,6 @@ mod tray;
 use anyhow::{Context, Result};
 use std::{
     future::Future,
-    io::ErrorKind,
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     path::PathBuf,
     time::Duration,
@@ -28,7 +27,6 @@ use crate::{config::AppConfig, state::AppState};
 
 fn main() -> Result<()> {
     init_tracing();
-    remove_legacy_session_info_file();
 
     let args = Args::parse();
     let prepared = prepare_server(args.clone())?;
@@ -259,21 +257,6 @@ fn detect_lan_ipv4() -> Option<Ipv4Addr> {
     match socket.local_addr().ok()?.ip() {
         IpAddr::V4(ip) if !ip.is_unspecified() && !ip.is_loopback() => Some(ip),
         _ => None,
-    }
-}
-
-fn remove_legacy_session_info_file() {
-    let Ok(path) =
-        std::env::current_dir().map(|dir| dir.join("textractor_bridge_server.session.json"))
-    else {
-        return;
-    };
-    match std::fs::remove_file(&path) {
-        Ok(()) => info!(path = %path.display(), "removed legacy session info file"),
-        Err(error) if error.kind() == ErrorKind::NotFound => {}
-        Err(error) => {
-            warn!(%error, path = %path.display(), "failed to remove legacy session info file")
-        }
     }
 }
 

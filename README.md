@@ -161,7 +161,7 @@ Binary distributions may include FFmpeg as a separate GPLv3 executable for MP3 p
 
 ## Current Limitations
 
-This repository implements the architecture and a functional text/history/SSE/Vue UI/mining path. The advanced Windows media backends are intentionally isolated behind traits, but not all production capture paths are complete yet:
+This repository implements the architecture and a functional text/history/SSE/Vue UI/mining path. The Windows media backends are isolated in media modules, but not all production capture paths are complete yet:
 
 - Screenshot capture defaults to Windows Graphics Capture with Win32 GDI fallback. True DXGI desktop-duplication crop is not implemented.
 - WASAPI process-loopback audio capture is implemented, with system loopback fallback when process loopback is unavailable. Line sessions finalize on manual finish, max duration, or the next line arriving. Main audio captures from two seconds before the line through its end; trim sources capture from ten seconds before the line and, on line advancement, include ten seconds after the line end.
