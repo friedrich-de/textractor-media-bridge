@@ -64,7 +64,7 @@ If port `6677` is already in use, the server automatically tries `6678`, then ke
 ws://localhost:6678/
 ```
 
-On Windows, the server makes one best-effort cleanup attempt for listener processes occupying `6677` or `6678`, then retries those ports before moving on. Messages are plain text Textractor sentences, not JSON. The stream is live-only and does not replay history when a client connects. This WebSocket server is part of `textractor_bridge_server`, not the Textractor extension DLL, so there is no long-lived WebSocket connection or worker thread inside Textractor. The tray tooltip shows the actual selected port.
+Messages are plain text Textractor sentences, not JSON. The stream is live-only and does not replay history when a client connects. The WebSocket server runs inside `textractor_bridge_server`, not the Textractor extension DLL, so Textractor never owns a long-lived WebSocket connection or worker thread. The tray tooltip shows the actual selected port.
 
 ## Persistence
 

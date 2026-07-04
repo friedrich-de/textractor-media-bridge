@@ -14,7 +14,6 @@ mod websocket;
 
 use anyhow::{Context, Result};
 use std::{
-    collections::BTreeSet,
     future::Future,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener as StdTcpListener, UdpSocket},
     path::PathBuf,
@@ -331,21 +330,11 @@ fn prepare_websocket_listener(
                 if first_error.is_none() {
                     first_error = Some(error.to_string());
                 }
-                if should_cleanup_websocket_port(candidate.port()) {
-                    warn!(
-                        %error,
-                        websocket = %format!("ws://{candidate}/"),
-                        "websocket port unavailable; attempting one-time listener cleanup"
-                    );
-                    cleanup_websocket_port_owner(candidate.port());
-                    if let Ok(listener) = bind_websocket_listener_after_cleanup(candidate) {
-                        info!(
-                            websocket = %format!("ws://{candidate}/"),
-                            "websocket port selected after listener cleanup"
-                        );
-                        return Some(prepared_websocket_listener(candidate, listener));
-                    }
-                }
+                warn!(
+                    %error,
+                    websocket = %format!("ws://{candidate}/"),
+                    "websocket port unavailable; trying next port"
+                );
             }
         }
     }
@@ -367,20 +356,6 @@ fn bind_websocket_listener(bind_addr: SocketAddr) -> Result<StdTcpListener> {
     Ok(listener)
 }
 
-fn bind_websocket_listener_after_cleanup(bind_addr: SocketAddr) -> Result<StdTcpListener> {
-    let mut last_error = None;
-    for _ in 0..10 {
-        match bind_websocket_listener(bind_addr) {
-            Ok(listener) => return Ok(listener),
-            Err(error) => {
-                last_error = Some(error);
-                std::thread::sleep(Duration::from_millis(100));
-            }
-        }
-    }
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("failed to bind {bind_addr}")))
-}
-
 fn prepared_websocket_listener(
     fallback_addr: SocketAddr,
     listener: StdTcpListener,
@@ -393,96 +368,6 @@ fn prepared_websocket_listener(
 
 fn websocket_bind_candidates(bind_addr: SocketAddr) -> impl Iterator<Item = SocketAddr> {
     (bind_addr.port()..=u16::MAX).map(move |port| SocketAddr::new(bind_addr.ip(), port))
-}
-
-fn should_cleanup_websocket_port(port: u16) -> bool {
-    matches!(port, 6677 | 6678)
-}
-
-fn cleanup_websocket_port_owner(port: u16) {
-    let pids = tcp_listener_pids(port);
-    if pids.is_empty() {
-        warn!(port, "no listener owner found for occupied websocket port");
-        return;
-    }
-
-    let current_pid = std::process::id();
-    for pid in pids {
-        if pid == current_pid {
-            warn!(
-                port,
-                pid, "skipping current process as websocket port owner"
-            );
-            continue;
-        }
-        match terminate_process(pid) {
-            Ok(()) => info!(port, pid, "terminated process occupying websocket port"),
-            Err(error) => warn!(%error, port, pid, "failed to terminate websocket port owner"),
-        }
-    }
-}
-
-#[cfg(windows)]
-fn tcp_listener_pids(port: u16) -> BTreeSet<u32> {
-    let output = windows_hidden_command("netstat")
-        .args(["-ano", "-p", "tcp"])
-        .output();
-    let Ok(output) = output else {
-        return BTreeSet::new();
-    };
-
-    let text = String::from_utf8_lossy(&output.stdout);
-    text.lines()
-        .filter_map(|line| tcp_listener_pid_from_netstat_line(line, port))
-        .collect()
-}
-
-#[cfg(not(windows))]
-fn tcp_listener_pids(_port: u16) -> BTreeSet<u32> {
-    BTreeSet::new()
-}
-
-fn tcp_listener_pid_from_netstat_line(line: &str, port: u16) -> Option<u32> {
-    let parts = line.split_whitespace().collect::<Vec<_>>();
-    if parts.len() < 5 || parts[0] != "TCP" {
-        return None;
-    }
-    local_endpoint_matches_port(parts[1], port).then(|| parts.last()?.parse().ok())?
-}
-
-fn local_endpoint_matches_port(endpoint: &str, port: u16) -> bool {
-    endpoint
-        .rsplit_once(':')
-        .and_then(|(_, endpoint_port)| endpoint_port.parse::<u16>().ok())
-        == Some(port)
-}
-
-#[cfg(windows)]
-fn terminate_process(pid: u32) -> Result<()> {
-    let status = windows_hidden_command("taskkill")
-        .args(["/PID", &pid.to_string(), "/F"])
-        .status()
-        .context("failed to launch taskkill")?;
-    if status.success() {
-        Ok(())
-    } else {
-        anyhow::bail!("taskkill exited with {status}")
-    }
-}
-
-#[cfg(not(windows))]
-fn terminate_process(pid: u32) -> Result<()> {
-    anyhow::bail!("process termination is only implemented on Windows for pid {pid}")
-}
-
-#[cfg(windows)]
-fn windows_hidden_command(program: &str) -> std::process::Command {
-    use std::os::windows::process::CommandExt;
-
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let mut command = std::process::Command::new(program);
-    command.creation_flags(CREATE_NO_WINDOW);
-    command
 }
 
 pub(crate) fn local_lan_url(bind_addr: SocketAddr) -> Option<String> {
@@ -564,21 +449,6 @@ mod tests {
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 6679),
             ]
         );
-    }
-
-    #[test]
-    fn websocket_cleanup_is_limited_to_first_compatibility_ports() {
-        assert!(should_cleanup_websocket_port(6677));
-        assert!(should_cleanup_websocket_port(6678));
-        assert!(!should_cleanup_websocket_port(6679));
-    }
-
-    #[test]
-    fn netstat_listener_parser_extracts_matching_port_pid() {
-        let line = "  TCP    0.0.0.0:6677           0.0.0.0:0              LISTENING       1234";
-
-        assert_eq!(tcp_listener_pid_from_netstat_line(line, 6677), Some(1234));
-        assert_eq!(tcp_listener_pid_from_netstat_line(line, 6678), None);
     }
 
     #[test]

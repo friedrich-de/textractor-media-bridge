@@ -33,6 +33,10 @@ ffmpeg.exe
 
 5. It should be open in the tray and let you open the web interface from there.
 
+> **WebSocket compatibility**
+>
+> If you previously installed [`textractor_websocket`](https://github.com/kuroahna/textractor_websocket), remove or disable that extension before using Textractor Media Bridge. This bridge now provides a compatible WebSocket stream from the server process, so the old extension is no longer needed and can conflict with Textractor.
+
 ![Textractor Media Bridge tray menu](pics/tray.png)
 
 Only active, real text threads are forwarded:
@@ -75,7 +79,7 @@ If port `6677` is already occupied, the bridge automatically tries `6678`, then 
 ws://localhost:6678/
 ```
 
-On Windows, the bridge makes one best-effort attempt to terminate listener processes occupying `6677` or `6678`, then retries those ports before moving on. Messages are live Textractor sentence text only. The tray tooltip shows the actual selected WebSocket port. Do not run the old `textractor_websocket` extension at the same time unless clients are intentionally using different ports.
+Messages are live Textractor sentence text only. The tray tooltip shows the actual selected WebSocket port. Do not run the old `textractor_websocket` extension at the same time unless you intentionally want a separate WebSocket stream on another port.
 
 ## Anki Mining
 
