@@ -9,12 +9,11 @@ export interface LoadedAudioTrim {
 }
 
 export async function loadAudioTrim(
-  token: string,
   lineId: LineId,
   activityBarCount: number,
 ): Promise<LoadedAudioTrim> {
-  const info = await getAudioTrimInfo(token, lineId);
-  const response = await fetch(assetUrl(info.source.url, token));
+  const info = await getAudioTrimInfo(lineId);
+  const response = await fetch(assetUrl(info.source.url));
   if (!response.ok) {
     throw new Error(`Unable to load audio graph: HTTP ${response.status}`);
   }

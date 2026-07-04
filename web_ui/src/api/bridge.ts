@@ -12,8 +12,6 @@ import type {
   PublicConfig,
 } from '@/api/types';
 
-const TOKEN_STORAGE_KEY = 'textractor-media-bridge.session-token';
-
 export class BridgeApiError extends Error {
   constructor(message: string) {
     super(message);
@@ -21,46 +19,22 @@ export class BridgeApiError extends Error {
   }
 }
 
-export function loadSessionToken(): string {
-  return (
-    new URLSearchParams(window.location.search).get('token') ??
-    localStorage.getItem(TOKEN_STORAGE_KEY) ??
-    ''
-  );
+export function assetUrl(url: string): string {
+  return url;
 }
 
-export function saveSessionToken(token: string | null | undefined): void {
-  if (token) {
-    localStorage.setItem(TOKEN_STORAGE_KEY, token);
-  } else {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-  }
+export async function getConfig(): Promise<PublicConfig> {
+  return apiJson<PublicConfig>('/api/config');
 }
 
-export function assetUrl(url: string, token: string): string {
-  return withToken(url, token);
-}
-
-export async function getConfig(token: string): Promise<PublicConfig> {
-  const config = await apiJson<PublicConfig>('/api/config', token);
-  saveSessionToken(config.sessionToken);
-  return config;
-}
-
-export async function updateAudioConfig(
-  token: string,
-  audioConfig: AudioConfig,
-): Promise<PublicConfig> {
-  const config = await apiJson<PublicConfig>('/api/config/audio', token, {
+export async function updateAudioConfig(audioConfig: AudioConfig): Promise<PublicConfig> {
+  return apiJson<PublicConfig>('/api/config/audio', {
     method: 'POST',
     body: JSON.stringify(audioConfig),
   });
-  saveSessionToken(config.sessionToken);
-  return config;
 }
 
 export async function getLines(
-  token: string,
   query: { limit?: number; beforeSeq?: number; afterSeq?: number } = {},
 ): Promise<LineHistoryPage> {
   const params = new URLSearchParams();
@@ -75,46 +49,39 @@ export async function getLines(
   }
 
   const suffix = params.toString() ? `?${params}` : '';
-  return apiJson<LineHistoryPage>(`/api/lines${suffix}`, token);
+  return apiJson<LineHistoryPage>(`/api/lines${suffix}`);
 }
 
-export async function clearLines(token: string): Promise<{ clearedLines: number }> {
-  return apiJson<{ clearedLines: number }>('/api/lines', token, { method: 'DELETE' });
+export async function clearLines(): Promise<{ clearedLines: number }> {
+  return apiJson<{ clearedLines: number }>('/api/lines', { method: 'DELETE' });
 }
 
-export async function finishAudio(token: string, lineId: LineId): Promise<AudioState | null> {
+export async function finishAudio(lineId: LineId): Promise<AudioState | null> {
   const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
     `/api/lines/${lineId}/audio/finish`,
-    token,
     { method: 'POST' },
   );
   return response.audio ?? null;
 }
 
-export async function removeAudio(token: string, lineId: LineId): Promise<AudioState | null> {
+export async function removeAudio(lineId: LineId): Promise<AudioState | null> {
   const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
     `/api/lines/${lineId}/audio`,
-    token,
     { method: 'DELETE' },
   );
   return response.audio ?? null;
 }
 
-export async function getAudioTrimInfo(
-  token: string,
-  lineId: LineId,
-): Promise<AudioTrimInfoResponse> {
-  return apiJson<AudioTrimInfoResponse>(`/api/lines/${lineId}/audio/trim`, token);
+export async function getAudioTrimInfo(lineId: LineId): Promise<AudioTrimInfoResponse> {
+  return apiJson<AudioTrimInfoResponse>(`/api/lines/${lineId}/audio/trim`);
 }
 
 export async function applyAudioTrim(
-  token: string,
   lineId: LineId,
   request: AudioTrimRequest,
 ): Promise<AudioState | null> {
   const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
     `/api/lines/${lineId}/audio/trim`,
-    token,
     {
       method: 'POST',
       body: JSON.stringify(request),
@@ -123,43 +90,39 @@ export async function applyAudioTrim(
   return response.audio ?? null;
 }
 
-export async function finishTrimAudio(token: string, lineId: LineId): Promise<AudioState | null> {
+export async function finishTrimAudio(lineId: LineId): Promise<AudioState | null> {
   const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
     `/api/lines/${lineId}/audio/trim/finish`,
-    token,
     { method: 'POST' },
   );
   return response.audio ?? null;
 }
 
-export async function prepareMine(
-  token: string,
-  request: MinePrepareRequest,
-): Promise<MinePrepareResponse> {
-  return apiJson<MinePrepareResponse>('/api/mine/prepare', token, {
+export async function prepareMine(request: MinePrepareRequest): Promise<MinePrepareResponse> {
+  return apiJson<MinePrepareResponse>('/api/mine/prepare', {
     method: 'POST',
     body: JSON.stringify(request),
   });
 }
 
-export async function getAssetBase64(token: string, assetId: string): Promise<AssetBase64Response> {
-  return apiJson<AssetBase64Response>(`/api/assets/${assetId}/base64`, token, {
+export async function getAssetBase64(assetId: string): Promise<AssetBase64Response> {
+  return apiJson<AssetBase64Response>(`/api/assets/${assetId}/base64`, {
     method: 'POST',
   });
 }
 
-export function openEventSource(token: string): EventSource {
-  return new EventSource(withToken('/api/events', token));
+export function openEventSource(): EventSource {
+  return new EventSource('/api/events');
 }
 
 export function parseBrowserEvent(event: MessageEvent<string>): BrowserEventPayload {
   return JSON.parse(event.data) as BrowserEventPayload;
 }
 
-async function apiJson<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
+async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(withToken(path, token), {
+    response = await fetch(path, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
@@ -183,13 +146,4 @@ async function apiJson<T>(path: string, token: string, init: RequestInit = {}): 
   }
 
   return (await response.json()) as T;
-}
-
-function withToken(path: string, token: string): string {
-  if (!token) {
-    return path;
-  }
-
-  const separator = path.includes('?') ? '&' : '?';
-  return `${path}${separator}token=${encodeURIComponent(token)}`;
 }

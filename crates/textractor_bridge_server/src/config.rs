@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
     pub server: ServerConfig,
@@ -17,21 +17,6 @@ pub struct AppConfig {
     pub mining: MiningConfig,
     pub anki: AnkiConfig,
     pub storage: StorageConfig,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            pipe: PipeConfig::default(),
-            screenshot: ScreenshotConfig::default(),
-            audio: AudioConfig::default(),
-            assets: AssetsConfig::default(),
-            mining: MiningConfig::default(),
-            anki: AnkiConfig::default(),
-            storage: StorageConfig::default(),
-        }
-    }
 }
 
 impl AppConfig {
@@ -90,16 +75,12 @@ impl AppConfig {
 #[serde(default)]
 pub struct ServerConfig {
     pub bind: String,
-    pub lan_mode: bool,
-    pub session_token_required: bool,
 }
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             bind: "0.0.0.0:7788".to_owned(),
-            lan_mode: true,
-            session_token_required: false,
         }
     }
 }
@@ -207,93 +188,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn loads_old_config_with_removed_fields() {
-        let text = r#"
-[server]
-bind = "127.0.0.1:7788"
-lan_mode = false
-
-[screenshot]
-backend = "auto"
-format = "png"
-
-[audio]
-backend = "auto"
-vad = "webrtc"
-format = "wav"
-ready_preroll_ms = 1000
-
-[mining]
-screenshot_format = "jpeg"
-screenshot_quality = 85
-audio_format = "mp3"
-audio_bitrate_kbps = 96
-
-[anki]
-endpoint = "http://127.0.0.1:8765"
-mode = "update_latest"
-overwrite_sentence_field = false
-fallback_create_note = false
-range_sentence_separator = " "
-range_screenshot_pick = "last"
-deck_name = "Mining"
-model_name = "Basic"
-sentence_field = "Sentence"
-notes_field = "Notes"
-screenshot_field = "Image"
-audio_field = "Audio"
-source_field = "Source"
-tags = ["textractor", "mined"]
-"#;
-
-        let config: AppConfig = toml::from_str(text).expect("old config should load");
-
-        assert_eq!(config.audio.backend, "auto");
-        assert_eq!(config.mining.screenshot_quality, 85);
-        assert_eq!(config.anki.range_screenshot_pick, RangeScreenshotPick::Last);
-    }
-
-    #[test]
     fn saved_config_uses_slim_schema() {
         let text = toml::to_string_pretty(&AppConfig::default()).expect("config serializes");
+        let value: toml::Value = toml::from_str(&text).expect("saved config parses");
 
-        for removed in [
-            "vad",
-            "screenshot_format",
-            "audio_format",
-            "overwrite_sentence_field",
-            "fallback_create_note",
-            "deck_name",
-            "notes_field",
-            "tags",
-            "ready_preroll_ms",
-            "trailing_silence_ms",
-            "no_speech_timeout_ms",
-            "trim_source_preroll_ms",
-            "trim_trailing_silence_ms",
-            "trim_no_speech_timeout_ms",
-            "activity_threshold",
-            "min_activity_ms",
-            "trim_activity_threshold",
-            "trim_min_activity_ms",
-            "trim_padding_ms",
-            "max_duration_ms",
-        ] {
-            assert!(
-                !text.contains(removed),
-                "saved config should not contain removed field {removed}"
-            );
-        }
+        assert_eq!(
+            value["server"]
+                .as_table()
+                .unwrap()
+                .keys()
+                .collect::<Vec<_>>(),
+            vec!["bind"]
+        );
+        assert_eq!(
+            value["audio"]
+                .as_table()
+                .unwrap()
+                .keys()
+                .collect::<Vec<_>>(),
+            vec!["backend"]
+        );
         assert!(text.contains("range_sentence_separator"));
         assert!(text.contains("audio_bitrate_kbps"));
     }
 
     #[test]
-    fn default_config_binds_lan_without_session_token() {
+    fn default_config_binds_lan() {
         let config = AppConfig::default();
 
         assert_eq!(config.server.bind, "0.0.0.0:7788");
-        assert!(config.server.lan_mode);
-        assert!(!config.server.session_token_required);
     }
 }

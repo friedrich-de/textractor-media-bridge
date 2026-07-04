@@ -32,11 +32,15 @@ UTF-8 JSON payload
 ```text
 GET  /api/health
 GET  /api/config
+POST /api/config/audio
 GET  /api/events
 GET  /api/lines?limit=&beforeSeq=&afterSeq=&sourceKey=
+DELETE /api/lines
+DELETE /api/lines/{line_id}/audio
 POST /api/lines/{line_id}/audio/finish
 GET  /api/lines/{line_id}/audio/trim
 POST /api/lines/{line_id}/audio/trim
+POST /api/lines/{line_id}/audio/trim/finish
 POST /api/mine/prepare
 POST /api/assets/{asset_id}/base64
 GET  /assets/{asset_id}
@@ -66,19 +70,9 @@ The server exposes screenshot and audio backend boundaries matching the specific
 
 - Process window resolution uses `EnumWindows`, `GetWindowThreadProcessId`, `IsWindowVisible`, DWM cloaking checks, root-owner preference, foreground preference, and largest-window fallback.
 - Screenshot capture uses Windows Graphics Capture for target windows in `auto` mode, validates the first frame, falls back to Win32 GDI `BitBlt` when WGC is unavailable or suspicious, and stores PNG assets.
-- Audio sessions are tracked per line and finalize through manual finish, trailing silence, no-speech timeout, or max duration. WASAPI process loopback captures the target process tree where available, and `auto` falls back to system loopback if process activation fails.
-- VAD trigger logic is implemented and tested independently. The active capture path uses PCM activity thresholds for line finalization and silence trimming. Newly captured lines store both a ready WAV trimmed from line-start audio and a broader trim-source WAV beginning one second before the line; trim edits slice the source WAV server-side and replace the ready WAV while preserving the end reason.
+- Audio sessions are tracked per line and finalize through manual finish, next-line advancement, or max duration. WASAPI process loopback captures the target process tree where available, and `auto` falls back to system loopback if process activation fails.
+- Main audio captures from two seconds before the line event through the chosen line end. Trim sources capture from ten seconds before the line event and, on automatic line advancement, include ten seconds after the main line end. Trim edits slice the source WAV server-side and replace the ready WAV while preserving the current end reason.
 
 ## LAN Mode
 
-By default the server binds to `0.0.0.0:7788` with token protection disabled, so the browser UI and API are reachable from the local network at `http://<PC-LAN-IP>:7788/`.
-
-If `session_token_required = true`, the server generates a token at startup. Protected API and asset requests then accept either:
-
-```text
-?token=<token>
-x-session-token: <token>
-Authorization: Bearer <token>
-```
-
-Local browser launches use `127.0.0.1` even when the bind address is `0.0.0.0`. At startup the server writes `textractor_bridge_server.session.json` in its working directory with the local URL, phone URL template, and token only when token protection is active.
+By default the server binds to `0.0.0.0:7788`, so the browser UI and API are reachable from the local network at `http://<PC-LAN-IP>:7788/`. Local browser launches use `127.0.0.1` even when the bind address is `0.0.0.0`. At startup the server writes `textractor_bridge_server.session.json` in its working directory with the local URL and phone URL template.

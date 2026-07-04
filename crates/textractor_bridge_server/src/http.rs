@@ -1,8 +1,7 @@
 use axum::{
     body::Body,
-    extract::{Path, Query, Request, State},
+    extract::{Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode, Uri},
-    middleware::{self, Next},
     response::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Response,
@@ -43,8 +42,6 @@ struct PublicConfig {
     config: AppConfig,
     pipe_name: String,
     data_dir: String,
-    session_token_required: bool,
-    session_token: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,7 +59,7 @@ struct ClearLinesResponse {
 }
 
 pub fn router(state: AppState) -> Router {
-    let protected = Router::new()
+    let api_routes = Router::new()
         .route("/api/config", get(config))
         .route("/api/config/audio", post(update_audio_config))
         .route("/api/events", get(events))
@@ -79,15 +76,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/mine/prepare", post(mine_prepare))
         .route("/api/assets/{asset_id}/base64", post(asset_base64))
-        .route("/assets/{asset_id}", get(asset_download))
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            require_session_token,
-        ));
+        .route("/assets/{asset_id}", get(asset_download));
 
     let router = Router::new()
         .route("/api/health", get(health))
-        .merge(protected)
+        .merge(api_routes)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state);
@@ -127,8 +120,6 @@ fn public_config(state: &AppState, config: AppConfig) -> PublicConfig {
         config,
         pipe_name: state.pipe_name(),
         data_dir: state.dirs().root.display().to_string(),
-        session_token_required: state.token_required(),
-        session_token: state.session_token().map(ToOwned::to_owned),
     }
 }
 
@@ -304,56 +295,6 @@ async fn asset_download(
             .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
     );
     Ok(response)
-}
-
-async fn require_session_token(
-    State(state): State<AppState>,
-    req: Request,
-    next: Next,
-) -> Response {
-    if !state.token_required() || request_has_token(&req, state.session_token()) {
-        return next.run(req).await;
-    }
-
-    (
-        StatusCode::UNAUTHORIZED,
-        Json(ErrorEvent {
-            code: "session_token_required".to_owned(),
-            message: "session token required".to_owned(),
-        }),
-    )
-        .into_response()
-}
-
-fn request_has_token(req: &Request, expected: Option<&str>) -> bool {
-    let Some(expected) = expected else {
-        return true;
-    };
-
-    let header_token = req
-        .headers()
-        .get("x-session-token")
-        .and_then(|value| value.to_str().ok())
-        .or_else(|| {
-            req.headers()
-                .get(header::AUTHORIZATION)
-                .and_then(|value| value.to_str().ok())
-                .and_then(|value| value.strip_prefix("Bearer "))
-        });
-    if header_token == Some(expected) {
-        return true;
-    }
-
-    query_param(req.uri(), "token").as_deref() == Some(expected)
-}
-
-fn query_param(uri: &Uri, name: &str) -> Option<String> {
-    uri.query()?.split('&').find_map(|pair| {
-        let mut parts = pair.splitn(2, '=');
-        let key = parts.next()?;
-        let value = parts.next().unwrap_or_default();
-        (key == name).then(|| value.to_owned())
-    })
 }
 
 fn sse_event(event_name: &str, id: u64, payload: &BrowserEvent) -> Option<Event> {

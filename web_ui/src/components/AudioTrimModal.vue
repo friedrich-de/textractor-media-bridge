@@ -160,7 +160,6 @@ const MIN_DURATION_MS = 100;
 const ACTIVITY_BAR_COUNT = 192;
 
 const props = defineProps<{
-  token: string;
   line: LineRecord;
 }>();
 
@@ -262,7 +261,7 @@ async function loadTrimInfo(): Promise<void> {
   loading.value = true;
   error.value = null;
   try {
-    const loaded = await loadAudioTrim(props.token, props.line.lineId, ACTIVITY_BAR_COUNT);
+    const loaded = await loadAudioTrim(props.line.lineId, ACTIVITY_BAR_COUNT);
     trimInfo.value = loaded.info;
     startMs.value = loaded.info.startMs;
     endMs.value = loaded.info.endMs;
@@ -432,7 +431,7 @@ async function saveTrim(): Promise<void> {
   error.value = null;
   pausePlayback();
   try {
-    const audio = await applyAudioTrim(props.token, props.line.lineId, {
+    const audio = await applyAudioTrim(props.line.lineId, {
       startMs: Math.round(startMs.value),
       endMs: Math.round(endMs.value),
     });

@@ -33,18 +33,18 @@ impl AppState {
 
         let mut purged = 0usize;
         for line in self.inner.history.all_lines() {
-            if line_references_any_asset(&line, &removed) {
-                if self.inner.history.purge_line(line.line_id)? {
-                    purged += 1;
-                    self.broadcast(
-                        line.line_seq,
-                        "line_updated",
-                        BrowserEvent::Error(ErrorEvent {
-                            code: "line_purged".to_owned(),
-                            message: format!("line {} purged with expired assets", line.line_id),
-                        }),
-                    );
-                }
+            if line_references_any_asset(&line, &removed)
+                && self.inner.history.purge_line(line.line_id)?
+            {
+                purged += 1;
+                self.broadcast(
+                    line.line_seq,
+                    "line_updated",
+                    BrowserEvent::Error(ErrorEvent {
+                        code: "line_purged".to_owned(),
+                        message: format!("line {} purged with expired assets", line.line_id),
+                    }),
+                );
             }
         }
         Ok(purged)
@@ -99,14 +99,14 @@ mod tests {
             Some(AudioState::Ready {
                 asset: ready,
                 duration_ms: 500,
-                end_reason: AudioEndReason::Silence,
-                trim_source: Some(AudioTrimSource {
+                end_reason: AudioEndReason::LineAdvanced,
+                trim_source: Some(Box::new(AudioTrimSource {
                     asset: source,
                     source_duration_ms: 1_500,
                     start_ms: 400,
                     end_ms: 900,
                     can_extend: true,
-                }),
+                })),
                 trim_recording_started_unix_ms: None,
             }),
         );

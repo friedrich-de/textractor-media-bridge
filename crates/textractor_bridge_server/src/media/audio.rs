@@ -790,7 +790,7 @@ mod tests {
 
     fn samples_by_ms(duration_ms: u64) -> Vec<i16> {
         (0..duration_ms)
-            .flat_map(|ms| std::iter::repeat(ms as i16).take(48))
+            .flat_map(|ms| std::iter::repeat_n(ms as i16, 48))
             .collect()
     }
 

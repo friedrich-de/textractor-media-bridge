@@ -6,7 +6,6 @@ import {
   finishTrimAudio,
   getConfig,
   getLines,
-  loadSessionToken,
   openEventSource,
   parseBrowserEvent,
   removeAudio,
@@ -17,7 +16,6 @@ import type { ToastApi } from '@/composables/useToast';
 export type LiveStatus = 'starting' | 'loading' | 'live' | 'reconnecting' | 'error';
 
 export function useBridgeLines(toast: ToastApi) {
-  const token = ref(loadSessionToken());
   const config = ref<PublicConfig | null>(null);
   const lines = ref<LineRecord[]>([]);
   const loading = ref(false);
@@ -31,8 +29,7 @@ export function useBridgeLines(toast: ToastApi) {
 
   async function start(): Promise<void> {
     status.value = 'loading';
-    config.value = await getConfig(token.value);
-    token.value = config.value.sessionToken ?? '';
+    config.value = await getConfig();
     await reloadLines();
     connectEvents();
   }
@@ -40,7 +37,7 @@ export function useBridgeLines(toast: ToastApi) {
   async function reloadLines(): Promise<void> {
     loading.value = true;
     try {
-      const page = await getLines(token.value, { limit: 180 });
+      const page = await getLines({ limit: 180 });
       lines.value = normalizeLines(page.lines);
       newestSeq.value = page.newestSeq ?? newestSeq.value;
       oldestSeq.value = page.oldestSeq ?? null;
@@ -57,7 +54,7 @@ export function useBridgeLines(toast: ToastApi) {
 
     loading.value = true;
     try {
-      const page = await getLines(token.value, {
+      const page = await getLines({
         limit: 100,
         beforeSeq: oldestSeq.value,
       });
@@ -70,7 +67,7 @@ export function useBridgeLines(toast: ToastApi) {
   }
 
   async function clearLines(): Promise<void> {
-    await clearServerLines(token.value);
+    await clearServerLines();
     lines.value = [];
     newestSeq.value = 0;
     oldestSeq.value = null;
@@ -78,17 +75,17 @@ export function useBridgeLines(toast: ToastApi) {
   }
 
   async function finishLineAudio(lineId: LineId): Promise<void> {
-    const audio = await finishAudio(token.value, lineId);
+    const audio = await finishAudio(lineId);
     patchLine(lineId, { audio });
   }
 
   async function finishLineTrimAudio(lineId: LineId): Promise<void> {
-    const audio = await finishTrimAudio(token.value, lineId);
+    const audio = await finishTrimAudio(lineId);
     patchLine(lineId, { audio });
   }
 
   async function removeLineAudio(lineId: LineId): Promise<void> {
-    const audio = await removeAudio(token.value, lineId);
+    const audio = await removeAudio(lineId);
     patchLine(lineId, { audio });
   }
 
@@ -98,7 +95,7 @@ export function useBridgeLines(toast: ToastApi) {
 
   function connectEvents(): void {
     eventSource?.close();
-    eventSource = openEventSource(token.value);
+    eventSource = openEventSource();
 
     eventSource.addEventListener('open', () => {
       status.value = 'live';
@@ -138,7 +135,7 @@ export function useBridgeLines(toast: ToastApi) {
     }
 
     try {
-      const page = await getLines(token.value, {
+      const page = await getLines({
         limit: 500,
         afterSeq: newestSeq.value,
       });
@@ -178,7 +175,6 @@ export function useBridgeLines(toast: ToastApi) {
   });
 
   return {
-    token,
     config,
     lines,
     loading,

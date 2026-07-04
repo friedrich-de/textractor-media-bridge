@@ -14,7 +14,6 @@ import { preserveHtmlTags, stripHtml } from '@/lib/htmlTags';
 import type { MinerSettings } from '@/lib/minerSettings';
 
 interface UseAnkiMiningOptions {
-  token: Ref<string>;
   settings: Ref<MinerSettings>;
   selectedLines: ComputedRef<readonly LineRecord[]>;
   selectedLineCount: ComputedRef<number>;
@@ -58,7 +57,7 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
       throw new Error('No text rows selected.');
     }
 
-    return prepareMine(options.token.value, {
+    return prepareMine({
       lineIds,
       rangeSentenceSeparator: options.settings.value.anki.rangeSentenceSeparator,
       rangeScreenshotPick: options.settings.value.anki.rangeScreenshotPick,
@@ -206,7 +205,7 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
   }
 
   async function storePreparedAsset(assetId: string): Promise<string> {
-    const asset = await getAssetBase64(options.token.value, assetId);
+    const asset = await getAssetBase64(assetId);
     return storeMediaFile(options.settings.value.anki.endpoint, asset.filename, asset.data);
   }
 

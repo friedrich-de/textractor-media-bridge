@@ -20,7 +20,7 @@ pub enum HistoryError {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 enum HistoryOp {
-    Upsert { line: LineRecord },
+    Upsert { line: Box<LineRecord> },
     Purge { line_id: LineId },
     Clear,
 }
@@ -44,6 +44,7 @@ impl HistoryStore {
                 }
                 match serde_json::from_str::<HistoryOp>(&line)? {
                     HistoryOp::Upsert { line } => {
+                        let line = *line;
                         lines.insert(line.line_seq, line);
                     }
                     HistoryOp::Purge { line_id } => {
@@ -71,7 +72,9 @@ impl HistoryStore {
 
     pub fn upsert(&self, line: LineRecord) -> Result<(), HistoryError> {
         self.lines.write().insert(line.line_seq, line.clone());
-        self.append(&HistoryOp::Upsert { line })
+        self.append(&HistoryOp::Upsert {
+            line: Box::new(line),
+        })
     }
 
     pub fn update<F>(&self, line_id: LineId, update: F) -> Result<Option<LineRecord>, HistoryError>
@@ -87,7 +90,7 @@ impl HistoryStore {
             line.clone()
         };
         self.append(&HistoryOp::Upsert {
-            line: updated.clone(),
+            line: Box::new(updated.clone()),
         })?;
         Ok(Some(updated))
     }

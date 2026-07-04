@@ -230,9 +230,12 @@ import { LoaderCircle, PlugZap, RefreshCw, RotateCcw, X } from 'lucide-vue-next'
 
 import { getModelsWithFields } from '@/api/ankiConnect';
 import type { AudioConfig } from '@/api/types';
-import { cloneAudioConfig, defaultAudioConfig, normalizeAudioConfig } from '@/lib/audioSettings';
 import type { MinerSettings } from '@/lib/minerSettings';
 import { cloneMinerSettings, defaultMinerSettings } from '@/lib/minerSettings';
+
+const defaultAudioConfig: AudioConfig = {
+  backend: 'auto',
+};
 
 const props = defineProps<{
   settings: MinerSettings;
@@ -342,5 +345,15 @@ function save(): void {
     settings: cloneMinerSettings(localSettings),
     audioConfig: normalizeAudioConfig(localAudioConfig),
   });
+}
+
+function cloneAudioConfig(config: Partial<AudioConfig> = {}): AudioConfig {
+  return { ...defaultAudioConfig, ...config };
+}
+
+function normalizeAudioConfig(config: AudioConfig): AudioConfig {
+  const normalized = cloneAudioConfig(config);
+  normalized.backend = normalized.backend || defaultAudioConfig.backend;
+  return normalized;
 }
 </script>

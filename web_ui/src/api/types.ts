@@ -25,13 +25,7 @@ export interface AssetInfo {
   byteSize: number;
 }
 
-export type AudioEndReason =
-  | 'manual'
-  | 'line_advanced'
-  | 'silence'
-  | 'no_speech_timeout'
-  | 'max_duration'
-  | 'backend_unavailable';
+export type AudioEndReason = 'manual' | 'line_advanced' | 'max_duration' | 'backend_unavailable';
 
 export interface AudioTrimSource {
   asset: AssetInfo;
@@ -97,8 +91,6 @@ export interface LineHistoryPage {
 export interface AppConfig {
   server: {
     bind: string;
-    lan_mode: boolean;
-    session_token_required: boolean;
   };
   audio: AudioConfig;
   anki: {
@@ -116,8 +108,6 @@ export interface PublicConfig {
   config: AppConfig;
   pipeName: string;
   dataDir: string;
-  sessionTokenRequired: boolean;
-  sessionToken?: string | null;
 }
 
 export type RangeScreenshotPick = 'first' | 'last';

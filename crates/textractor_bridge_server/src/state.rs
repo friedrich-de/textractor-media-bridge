@@ -9,7 +9,6 @@ use bridge_protocol::{BrowserEvent, LineId, LinePatch, LineSeq, LineUpdatedEvent
 use parking_lot::RwLock;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::broadcast;
-use uuid::Uuid;
 
 use crate::{
     assets::AssetStore,
@@ -39,7 +38,6 @@ struct AppStateInner {
     screenshots: ScreenshotManager,
     audio: AudioManager,
     events: broadcast::Sender<SseMessage>,
-    session_token: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -81,8 +79,6 @@ impl AppState {
         let screenshots = ScreenshotManager::new(config.screenshot.backend.clone());
         let audio = AudioManager::new(config.audio.clone());
         let (events, _) = broadcast::channel(512);
-        let session_token = (config.server.lan_mode && config.server.session_token_required)
-            .then(|| Uuid::new_v4().simple().to_string());
 
         Ok(Self {
             inner: Arc::new(AppStateInner {
@@ -94,7 +90,6 @@ impl AppState {
                 screenshots,
                 audio,
                 events,
-                session_token,
             }),
         })
     }
@@ -123,14 +118,6 @@ impl AppState {
         } else {
             config.pipe.name.clone()
         }
-    }
-
-    pub fn session_token(&self) -> Option<&str> {
-        self.inner.session_token.as_deref()
-    }
-
-    pub fn token_required(&self) -> bool {
-        self.inner.session_token.is_some()
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<SseMessage> {

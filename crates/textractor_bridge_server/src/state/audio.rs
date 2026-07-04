@@ -161,13 +161,13 @@ impl AppState {
                             ..
                         }) = line.audio.as_mut()
                         {
-                            *trim_source = Some(AudioTrimSource {
+                            *trim_source = Some(Box::new(AudioTrimSource {
                                 asset: source_asset,
                                 source_duration_ms: captured.source_duration_ms,
                                 start_ms: captured.start_ms,
                                 end_ms: captured.end_ms,
                                 can_extend: true,
-                            });
+                            }));
                             *trim_recording_started_unix_ms = None;
                         }
                     })?
@@ -260,13 +260,13 @@ impl AppState {
             asset,
             duration_ms: sliced.duration_ms,
             end_reason,
-            trim_source: Some(AudioTrimSource {
+            trim_source: Some(Box::new(AudioTrimSource {
                 asset: info.source,
                 source_duration_ms: info.source_duration_ms,
                 start_ms: request.start_ms,
                 end_ms: request.end_ms,
                 can_extend: info.can_extend,
-            }),
+            })),
             trim_recording_started_unix_ms: None,
         };
 
@@ -409,7 +409,7 @@ pub(super) fn trim_info_for_line(line: &LineRecord) -> Result<AudioTrimInfoRespo
             line.line_id,
             asset,
             *duration_ms,
-            trim_source.as_ref(),
+            trim_source.as_deref(),
         )),
         Some(AudioState::Recording { .. }) => Err(anyhow!("audio is still recording")),
         Some(AudioState::NoAudio { .. }) | None => Err(anyhow!("line does not have ready audio")),
@@ -554,13 +554,13 @@ mod tests {
                     asset: ready_asset.clone(),
                     duration_ms: 500,
                     end_reason: AudioEndReason::Manual,
-                    trim_source: Some(AudioTrimSource {
+                    trim_source: Some(Box::new(AudioTrimSource {
                         asset: source_asset.clone(),
                         source_duration_ms: 1_000,
                         start_ms: 200,
                         end_ms: 700,
                         can_extend: true,
-                    }),
+                    })),
                     trim_recording_started_unix_ms: None,
                 }),
             ))

@@ -114,7 +114,7 @@ fn decode_pcm16_wav(bytes: &[u8]) -> Result<DecodedPcm16Wav, String> {
                 sample_rate = Some(rate);
             }
             b"data" => {
-                if chunk_len % 2 != 0 {
+                if !chunk_len.is_multiple_of(2) {
                     return Err("invalid PCM16 WAV data length".to_owned());
                 }
                 let samples = bytes[data_start..data_end]

@@ -10,7 +10,6 @@ crates/
   textractor_bridge_dll/        Textractor cdylib extension
   textractor_bridge_server/     Tokio/Axum local server
 web_ui/                         Static browser UI served by the server
-config/bridge.example.toml      Example configuration
 docs/ARCHITECTURE.md            Architecture notes and current limitations
 ```
 
@@ -89,7 +88,7 @@ C:\Users\ald\Documents\x86\textractor_bridge_server.exe
 ## Run
 
 ```powershell
-cargo run -p textractor_bridge_server -- --config config/bridge.example.toml --open
+cargo run -p textractor_bridge_server -- --open
 ```
 
 Default UI on the PC:

@@ -79,7 +79,6 @@
 
     <AudioTrimModal
       v-if="audioTrimLine"
-      :token="token"
       :line="audioTrimLine"
       @close="audioTrimLine = null"
       @saved="handleAudioTrimSaved"
@@ -133,7 +132,6 @@ const audioTrimLine = ref<LineRecord | null>(null);
 const clearingLines = ref(false);
 
 const {
-  token,
   config,
   lines,
   loading,
@@ -167,7 +165,6 @@ const {
   sendSelectionToAnki,
   resetTargetPreview,
 } = useAnkiMining({
-  token,
   settings,
   selectedLines,
   selectedLineCount,
@@ -193,7 +190,7 @@ function previewLineImage(line: LineRecord): void {
     toast.warning('No screenshot for this line.');
     return;
   }
-  mediaPreview.value = { url: assetUrl(line.screenshot.url, token.value) };
+  mediaPreview.value = { url: assetUrl(line.screenshot.url) };
 }
 
 async function previewLineAudio(line: LineRecord): Promise<void> {
@@ -201,7 +198,7 @@ async function previewLineAudio(line: LineRecord): Promise<void> {
     toast.warning('No audio for this line.');
     return;
   }
-  await playAudioPreview(assetUrl(line.audio.asset.url, token.value));
+  await playAudioPreview(assetUrl(line.audio.asset.url));
 }
 
 function scrollTranscriptTop(): void {
@@ -289,7 +286,7 @@ async function previewSelectionImage(): Promise<void> {
       toast.warning('No screenshot is available for the selection.');
       return;
     }
-    mediaPreview.value = { url: assetUrl(url, token.value) };
+    mediaPreview.value = { url: assetUrl(url) };
   } catch (error) {
     toast.error(error instanceof Error ? error.message : 'Unable to prepare screenshot.');
   }
@@ -302,7 +299,7 @@ async function previewSelectionAudio(): Promise<void> {
       toast.warning('No audio is available for the selection.');
       return;
     }
-    await playAudioPreview(assetUrl(url, token.value));
+    await playAudioPreview(assetUrl(url));
   } catch (error) {
     toast.error(error instanceof Error ? error.message : 'Unable to prepare audio.');
   }
@@ -325,7 +322,7 @@ async function saveSettings(payload: SettingsSavePayload): Promise<void> {
   saveMinerSettings(settings.value);
 
   try {
-    config.value = await updateAudioConfig(token.value, payload.audioConfig);
+    config.value = await updateAudioConfig(payload.audioConfig);
     resetTargetPreview();
     showSettings.value = false;
     toast.success('Settings saved.');

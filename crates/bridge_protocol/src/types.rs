@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 pub type LineId = u64;
 pub type LineSeq = u64;
@@ -161,26 +161,24 @@ pub struct AssetInfo {
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum AudioState {
     Recording {
-        #[serde(rename = "startedUnixMs", alias = "started_unix_ms")]
+        #[serde(rename = "startedUnixMs")]
         started_unix_ms: i64,
     },
     Ready {
         asset: AssetInfo,
-        #[serde(rename = "durationMs", alias = "duration_ms")]
+        #[serde(rename = "durationMs")]
         duration_ms: u64,
-        #[serde(rename = "endReason", alias = "end_reason")]
+        #[serde(rename = "endReason")]
         end_reason: AudioEndReason,
         #[serde(
             default,
             rename = "trimSource",
-            alias = "trim_source",
             skip_serializing_if = "Option::is_none"
         )]
-        trim_source: Option<AudioTrimSource>,
+        trim_source: Option<Box<AudioTrimSource>>,
         #[serde(
             default,
             rename = "trimRecordingStartedUnixMs",
-            alias = "trim_recording_started_unix_ms",
             skip_serializing_if = "Option::is_none"
         )]
         trim_recording_started_unix_ms: Option<i64>,
@@ -207,8 +205,6 @@ pub struct AudioTrimSource {
 pub enum AudioEndReason {
     Manual,
     LineAdvanced,
-    Silence,
-    NoSpeechTimeout,
     MaxDuration,
     BackendUnavailable,
 }

@@ -224,10 +224,10 @@ impl AssetStore {
             if ttl.is_zero() {
                 continue;
             }
-            if now.duration_since(entry.modified).unwrap_or(Duration::ZERO) > ttl {
-                if fs::remove_file(&entry.path).is_ok() {
-                    removed.push(entry.asset_id.clone());
-                }
+            if now.duration_since(entry.modified).unwrap_or(Duration::ZERO) > ttl
+                && fs::remove_file(&entry.path).is_ok()
+            {
+                removed.push(entry.asset_id.clone());
             }
         }
 

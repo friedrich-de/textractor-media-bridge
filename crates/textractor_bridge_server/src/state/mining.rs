@@ -144,7 +144,7 @@ mod tests {
                 Some(AudioState::Ready {
                     asset: first,
                     duration_ms: 100,
-                    end_reason: AudioEndReason::Silence,
+                    end_reason: AudioEndReason::LineAdvanced,
                     trim_source: None,
                     trim_recording_started_unix_ms: None,
                 }),
