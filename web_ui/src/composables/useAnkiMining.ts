@@ -10,7 +10,7 @@ import {
 } from '@/api/ankiConnect';
 import type { LineRecord, MinePrepareResponse } from '@/api/types';
 import type { ToastApi } from '@/composables/useToast';
-import { preserveHtmlTags, stripHtml } from '@/lib/htmlTags';
+import { escapeHtml, stripHtml } from '@/lib/htmlTags';
 import type { MinerSettings } from '@/lib/minerSettings';
 import { buildFilteredSentence } from '@/lib/textFilters';
 
@@ -212,10 +212,7 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
     const audioField = anki.audioField.trim();
 
     if (sentenceField && noteHasField(note, sentenceField)) {
-      fields[sentenceField] = preserveHtmlTags(
-        noteFieldValue(note, sentenceField),
-        prepared.sentence,
-      );
+      fields[sentenceField] = escapeHtml(prepared.sentence);
     }
 
     if (sourceField && noteHasField(note, sourceField)) {
@@ -265,10 +262,6 @@ function configuredUpdateFields(anki: MinerSettings['anki']): string[] {
   return [anki.sentenceField, anki.audioField, anki.imageField, anki.sourceField]
     .map((field) => field.trim())
     .filter((field) => field.length > 0);
-}
-
-function noteFieldValue(note: NoteInfo, fieldName: string): string {
-  return note.fields[fieldName]?.value ?? '';
 }
 
 function noteHasField(note: NoteInfo, fieldName: string): boolean {
