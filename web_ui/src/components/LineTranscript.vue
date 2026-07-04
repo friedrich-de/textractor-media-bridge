@@ -71,6 +71,14 @@
               >
                 <VolumeX :size="16" />
               </TooltipButton>
+              <TooltipButton
+                class="icon-button small danger"
+                type="button"
+                tooltip="Delete line"
+                @click.stop="emit('deleteLine', line)"
+              >
+                <Trash2 :size="16" />
+              </TooltipButton>
             </div>
           </div>
         </div>
@@ -88,6 +96,7 @@ import {
   Image as ImageIcon,
   LoaderCircle,
   Scissors,
+  Trash2,
   Volume2,
   VolumeX,
 } from '@lucide/vue';
@@ -110,6 +119,7 @@ const emit = defineEmits<{
   trimAudio: [line: LineRecord];
   finishTrimAudio: [line: LineRecord];
   removeAudio: [line: LineRecord];
+  deleteLine: [line: LineRecord];
 }>();
 
 const transcriptShell = shallowRef<HTMLElement | null>(null);

@@ -6,7 +6,8 @@ mod screenshots;
 
 use anyhow::{Context, Result};
 use bridge_protocol::{
-    BrowserEvent, LineId, LinePatch, LineSeq, LineUpdatedEvent, LinesClearedEvent,
+    BrowserEvent, BrowserLineDeletedEvent, LineId, LinePatch, LineSeq, LineUpdatedEvent,
+    LinesClearedEvent,
 };
 use parking_lot::RwLock;
 use std::{path::PathBuf, sync::Arc};
@@ -148,6 +149,14 @@ impl AppState {
             id,
             "lines_cleared",
             BrowserEvent::LinesCleared(LinesClearedEvent { cleared_lines }),
+        );
+    }
+
+    fn broadcast_line_deleted(&self, id: LineSeq, line_id: LineId) {
+        self.broadcast(
+            id,
+            "line_deleted",
+            BrowserEvent::LineDeleted(BrowserLineDeletedEvent { line_id }),
         );
     }
 

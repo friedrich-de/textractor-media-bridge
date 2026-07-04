@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 
 import {
   clearLines as clearServerLines,
+  deleteLine,
   finishAudio,
   finishTrimAudio,
   getConfig,
@@ -86,6 +87,13 @@ export function useBridgeLines(toast: ToastApi) {
     patchLine(lineId, { audio });
   }
 
+  async function deleteLineRecord(lineId: LineId): Promise<void> {
+    const response = await deleteLine(lineId);
+    if (response.deleted) {
+      removeLocalLine(lineId);
+    }
+  }
+
   function updateLineAudio(lineId: LineId, audio: AudioState | null): void {
     patchLine(lineId, { audio });
   }
@@ -124,6 +132,13 @@ export function useBridgeLines(toast: ToastApi) {
         return;
       }
       clearLocalLines();
+    });
+    eventSource.addEventListener('line_deleted', (event) => {
+      const payload = parseBrowserEvent(event);
+      if (payload.type !== 'line_deleted') {
+        return;
+      }
+      removeLocalLine(payload.lineId);
     });
     eventSource.addEventListener('error', () => {
       status.value = 'reconnecting';
@@ -181,6 +196,15 @@ export function useBridgeLines(toast: ToastApi) {
     hasMoreOlder.value = false;
   }
 
+  function removeLocalLine(lineId: LineId): void {
+    const next = normalizeLines(lines.value.filter((line) => line.lineId !== lineId));
+    lines.value = next;
+    oldestSeq.value = next.at(0)?.lineSeq ?? null;
+    if (next.length === 0) {
+      hasMoreOlder.value = false;
+    }
+  }
+
   onBeforeUnmount(() => {
     eventSource?.close();
   });
@@ -199,6 +223,7 @@ export function useBridgeLines(toast: ToastApi) {
     finishLineAudio,
     finishLineTrimAudio,
     removeLineAudio,
+    deleteLineRecord,
     updateLineAudio,
   };
 }

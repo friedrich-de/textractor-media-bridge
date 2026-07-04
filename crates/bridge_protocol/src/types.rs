@@ -96,6 +96,12 @@ pub struct LinesClearedEvent {
     pub cleared_lines: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserLineDeletedEvent {
+    pub line_id: LineId,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinePatch {
@@ -116,6 +122,7 @@ pub enum BrowserEvent {
     LineAdded(BrowserLineAddedEvent),
     LineUpdated(LineUpdatedEvent),
     LinesCleared(LinesClearedEvent),
+    LineDeleted(BrowserLineDeletedEvent),
     Error(ErrorEvent),
 }
 
@@ -301,6 +308,17 @@ mod tests {
         let json = serde_json::to_string(&event).expect("event serializes");
 
         assert_eq!(json, r#"{"type":"lines_cleared","clearedLines":3}"#);
+        let decoded: BrowserEvent = serde_json::from_str(&json).expect("event deserializes");
+        assert_eq!(decoded, event);
+    }
+
+    #[test]
+    fn browser_event_serializes_line_deleted() {
+        let event = BrowserEvent::LineDeleted(BrowserLineDeletedEvent { line_id: 7 });
+
+        let json = serde_json::to_string(&event).expect("event serializes");
+
+        assert_eq!(json, r#"{"type":"line_deleted","lineId":7}"#);
         let decoded: BrowserEvent = serde_json::from_str(&json).expect("event deserializes");
         assert_eq!(decoded, event);
     }

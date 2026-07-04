@@ -166,6 +166,11 @@ export interface BrowserLinesClearedPayload {
   clearedLines: number;
 }
 
+export interface BrowserLineDeletedPayload {
+  type: 'line_deleted';
+  lineId: LineId;
+}
+
 export interface BrowserErrorPayload {
   type: 'error';
   code: string;
@@ -177,4 +182,5 @@ export type BrowserEventPayload =
   | BrowserLineAddedPayload
   | BrowserLineUpdatedPayload
   | BrowserLinesClearedPayload
+  | BrowserLineDeletedPayload
   | BrowserErrorPayload;

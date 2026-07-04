@@ -1,7 +1,7 @@
 use anyhow::Result;
 use bridge_protocol::{
-    AudioState, BrowserEvent, BrowserLineAddedEvent, LineHistoryPage, LinePatch, LineRecord,
-    LineSeq, PipeLineEvent, PipeLineMeta, PROTOCOL_VERSION,
+    AudioState, BrowserEvent, BrowserLineAddedEvent, LineHistoryPage, LineId, LinePatch,
+    LineRecord, LineSeq, PipeLineEvent, PipeLineMeta, PROTOCOL_VERSION,
 };
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
@@ -32,6 +32,19 @@ impl AppState {
         let cleared_lines = self.inner.history.clear()?;
         self.broadcast_lines_cleared(event_id, cleared_lines);
         Ok(cleared_lines)
+    }
+
+    pub fn delete_line(&self, line_id: LineId) -> Result<bool> {
+        self.inner.audio.remove_line_session(line_id);
+        let Some(line) = self.inner.history.get_line(line_id) else {
+            return Ok(false);
+        };
+
+        let deleted = self.inner.history.purge_line(line_id)?;
+        if deleted {
+            self.broadcast_line_deleted(line.line_seq, line_id);
+        }
+        Ok(deleted)
     }
 
     pub async fn ingest_pipe_line(&self, mut event: PipeLineEvent) -> Result<Option<LineRecord>> {
@@ -519,6 +532,40 @@ mod tests {
             event.payload,
             BrowserEvent::LinesCleared(bridge_protocol::LinesClearedEvent { cleared_lines: 2 })
         ));
+    }
+
+    #[tokio::test]
+    async fn delete_line_removes_one_line_and_broadcasts_event() {
+        let (_tmp, state) = test_state(true, "off");
+        let mut events = state.subscribe();
+
+        let first = state
+            .ingest_pipe_line(event(1, 10_000, "first", 7, 2))
+            .await
+            .unwrap()
+            .unwrap();
+        let second = state
+            .ingest_pipe_line(event(2, 11_000, "second", 7, 2))
+            .await
+            .unwrap()
+            .unwrap();
+        while events.try_recv().is_ok() {}
+
+        let deleted = state.delete_line(first.line_id).unwrap();
+
+        assert!(deleted);
+        let lines = state.inner.history.all_lines();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].line_id, second.line_id);
+        let event = events.recv().await.unwrap();
+        assert_eq!(event.event_name, "line_deleted");
+        assert_eq!(event.id, first.line_seq);
+        assert!(matches!(
+            event.payload,
+            BrowserEvent::LineDeleted(bridge_protocol::BrowserLineDeletedEvent { line_id })
+                if line_id == first.line_id
+        ));
+        assert!(!state.delete_line(first.line_id).unwrap());
     }
 
     fn test_state(

@@ -56,6 +56,12 @@ export async function clearLines(): Promise<{ clearedLines: number }> {
   return apiJson<{ clearedLines: number }>('/api/lines', { method: 'DELETE' });
 }
 
+export async function deleteLine(lineId: LineId): Promise<{ lineId: LineId; deleted: boolean }> {
+  return apiJson<{ lineId: LineId; deleted: boolean }>(`/api/lines/${lineId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function finishAudio(lineId: LineId): Promise<AudioState | null> {
   const response = await apiJson<{ lineId: LineId; audio?: AudioState | null }>(
     `/api/lines/${lineId}/audio/finish`,

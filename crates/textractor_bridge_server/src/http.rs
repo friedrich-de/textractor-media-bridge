@@ -87,11 +87,19 @@ struct ClearLinesResponse {
     cleared_lines: usize,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteLineResponse {
+    line_id: LineId,
+    deleted: bool,
+}
+
 pub fn router(state: AppState) -> Router {
     let api_routes = Router::new()
         .route("/api/config", get(config).post(update_config))
         .route("/api/events", get(events))
         .route("/api/lines", get(lines).delete(clear_lines))
+        .route("/api/lines/{line_id}", delete(delete_line))
         .route("/api/lines/{line_id}/audio", delete(remove_audio))
         .route("/api/lines/{line_id}/audio/finish", post(finish_audio))
         .route(
@@ -197,6 +205,14 @@ async fn lines(
 async fn clear_lines(State(state): State<AppState>) -> Result<Json<ClearLinesResponse>, ApiError> {
     let cleared_lines = state.clear_lines().map_err(ApiError::bad_request)?;
     Ok(Json(ClearLinesResponse { cleared_lines }))
+}
+
+async fn delete_line(
+    State(state): State<AppState>,
+    Path(line_id): Path<LineId>,
+) -> Result<Json<DeleteLineResponse>, ApiError> {
+    let deleted = state.delete_line(line_id).map_err(ApiError::bad_request)?;
+    Ok(Json(DeleteLineResponse { line_id, deleted }))
 }
 
 async fn events(

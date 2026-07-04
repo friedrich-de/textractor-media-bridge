@@ -49,6 +49,7 @@
       @trim-audio="trimLineAudio"
       @finish-trim-audio="finishTrimAudio"
       @remove-audio="removeAudio"
+      @delete-line="deleteLine"
     />
 
     <SelectionBar
@@ -147,6 +148,7 @@ const {
   finishLineAudio,
   finishLineTrimAudio,
   removeLineAudio,
+  deleteLineRecord,
   updateLineAudio,
 } = useBridgeLines(toast);
 
@@ -286,6 +288,18 @@ async function removeAudio(line: LineRecord): Promise<void> {
     await removeLineAudio(line.lineId);
   } catch (error) {
     toast.error(error instanceof Error ? error.message : 'Unable to remove audio.');
+  }
+}
+
+async function deleteLine(line: LineRecord): Promise<void> {
+  try {
+    await deleteLineRecord(line.lineId);
+    if (audioTrimLine.value?.lineId === line.lineId) {
+      audioTrimLine.value = null;
+    }
+    resetTargetPreview();
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Unable to delete line.');
   }
 }
 
