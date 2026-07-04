@@ -202,6 +202,15 @@
               </button>
             </div>
 
+            <label class="check-field">
+              <input
+                v-model="localSettings.textFilters.deduplicateMultilinePrefixes"
+                name="text_filters_deduplicate_multiline_prefixes"
+                type="checkbox"
+              />
+              <span>Deduplicate progressive lines inside text</span>
+            </label>
+
             <div v-if="localSettings.textFilters.regexes.length > 0" class="regex-filter-list">
               <div
                 v-for="(_regex, index) in localSettings.textFilters.regexes"

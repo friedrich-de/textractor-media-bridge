@@ -4,7 +4,7 @@ use bridge_protocol::{
     LineSeq, PipeLineEvent, PipeLineMeta, PROTOCOL_VERSION,
 };
 use std::collections::HashMap;
-use tracing::warn;
+use tracing::{debug, info, warn};
 
 use crate::media::window::resolve_process_window_title;
 
@@ -94,15 +94,41 @@ impl AppState {
 
     fn try_join_progressive_line(&self, event: &PipeLineEvent) -> Result<Option<LineRecord>> {
         if !self.config().lines.join_progressive_text {
+            debug!(
+                reason = "disabled",
+                process_id = event.meta.process_id,
+                thread_number = event.meta.thread_number,
+                source = %event.meta.source,
+                current_raw_len = event.text.len(),
+                "progressive line join rejected"
+            );
             return Ok(None);
         }
 
         let Some(previous) = self.inner.history.newest_line() else {
             return Ok(None);
         };
-        if !can_join_progressive_line(&previous, event) {
-            return Ok(None);
-        }
+        let decision = match progressive_join_decision(&previous, event) {
+            Ok(decision) => decision,
+            Err(rejection) => {
+                debug!(
+                    reason = rejection.reason,
+                    previous_line_id = previous.line_id,
+                    previous_process_id = previous.meta.process_id,
+                    previous_thread_number = previous.meta.thread_number,
+                    previous_source = %previous.meta.source,
+                    current_process_id = event.meta.process_id,
+                    current_thread_number = event.meta.thread_number,
+                    current_source = %event.meta.source,
+                    previous_raw_len = rejection.previous_raw_len,
+                    current_raw_len = rejection.current_raw_len,
+                    previous_normalized_len = rejection.previous_normalized_len,
+                    current_normalized_len = rejection.current_normalized_len,
+                    "progressive line join rejected"
+                );
+                return Ok(None);
+            }
+        };
 
         let updated_text = event.text.clone();
         let updated = self.inner.history.update(previous.line_id, |line| {
@@ -112,6 +138,18 @@ impl AppState {
             return Ok(None);
         };
 
+        info!(
+            previous_line_id = previous.line_id,
+            current_message_id = event.message_id,
+            process_id = event.meta.process_id,
+            thread_number = event.meta.thread_number,
+            source = %event.meta.source,
+            previous_raw_len = decision.previous_raw_len,
+            current_raw_len = decision.current_raw_len,
+            previous_normalized_len = decision.previous_normalized_len,
+            current_normalized_len = decision.current_normalized_len,
+            "progressive line joined"
+        );
         self.broadcast_line_update(
             line.line_seq,
             line.line_id,
@@ -141,11 +179,114 @@ impl AppState {
     }
 }
 
-fn can_join_progressive_line(previous: &LineRecord, event: &PipeLineEvent) -> bool {
-    same_join_source(&previous.meta, &event.meta)
-        && event.text.starts_with(&previous.text)
-        && event.text.len() > previous.text.len()
-        && !matches!(previous.audio.as_ref(), Some(AudioState::Ready { .. }))
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProgressiveJoinMatch {
+    previous_raw_len: usize,
+    current_raw_len: usize,
+    previous_normalized_len: usize,
+    current_normalized_len: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProgressiveJoinRejection {
+    reason: &'static str,
+    previous_raw_len: usize,
+    current_raw_len: usize,
+    previous_normalized_len: usize,
+    current_normalized_len: usize,
+}
+
+fn progressive_join_decision(
+    previous: &LineRecord,
+    event: &PipeLineEvent,
+) -> Result<ProgressiveJoinMatch, ProgressiveJoinRejection> {
+    let previous_normalized = normalize_progressive_text(&previous.text);
+    let current_normalized = normalize_progressive_text(&event.text);
+    let stats = ProgressiveJoinMatch {
+        previous_raw_len: previous.text.len(),
+        current_raw_len: event.text.len(),
+        previous_normalized_len: previous_normalized.len(),
+        current_normalized_len: current_normalized.len(),
+    };
+
+    if !same_join_source(&previous.meta, &event.meta) {
+        return Err(rejection("different_source", stats));
+    }
+    if matches!(previous.audio.as_ref(), Some(AudioState::Ready { .. })) {
+        return Err(rejection("previous_audio_ready", stats));
+    }
+    if !current_normalized.starts_with(&previous_normalized)
+        || current_normalized.len() <= previous_normalized.len()
+    {
+        return Err(rejection("not_extension", stats));
+    }
+
+    Ok(stats)
+}
+
+fn rejection(reason: &'static str, stats: ProgressiveJoinMatch) -> ProgressiveJoinRejection {
+    ProgressiveJoinRejection {
+        reason,
+        previous_raw_len: stats.previous_raw_len,
+        current_raw_len: stats.current_raw_len,
+        previous_normalized_len: stats.previous_normalized_len,
+        current_normalized_len: stats.current_normalized_len,
+    }
+}
+
+fn normalize_progressive_text(text: &str) -> String {
+    strip_rich_text_tags(text)
+        .replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .replace("\\r", "\n")
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .trim_end()
+        .to_owned()
+}
+
+fn strip_rich_text_tags(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '<' {
+            let mut tag = String::new();
+            let mut probe = chars.clone();
+            let mut found_end = false;
+            for next in &mut probe {
+                if next == '>' {
+                    found_end = true;
+                    break;
+                }
+                tag.push(next);
+                if tag.len() > 96 {
+                    break;
+                }
+            }
+
+            if found_end && is_known_rich_text_tag(&tag) {
+                for next in chars.by_ref() {
+                    if next == '>' {
+                        break;
+                    }
+                }
+                continue;
+            }
+        }
+        out.push(ch);
+    }
+    out
+}
+
+fn is_known_rich_text_tag(tag: &str) -> bool {
+    let tag = tag.trim();
+    let tag = tag.strip_prefix('/').unwrap_or(tag);
+    let name = tag
+        .split(|ch: char| ch == '=' || ch.is_whitespace())
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    matches!(name.as_str(), "size" | "color" | "line-height")
 }
 
 fn same_join_source(previous: &PipeLineMeta, next: &PipeLineMeta) -> bool {
@@ -186,6 +327,88 @@ mod tests {
         assert_eq!(lines[0].line_id, first.line_id);
         assert_eq!(lines[0].timestamp_unix_ms, 10_000);
         assert_eq!(lines[0].text, "俺はすごい");
+    }
+
+    #[tokio::test]
+    async fn progressive_text_joins_when_current_rewrites_before_trailing_newlines() {
+        let (_tmp, state) = test_state(true, "off");
+        let first_text = r#"<size=+4><color=#956f6e>圭一</color>\n</size>「レナが来るまでずーっと待ってる。
+
+"#;
+        let second_text = r#"<size=+4><color=#956f6e>圭一</color>\n</size>「レナが来るまでずーっと待ってる。いつまでも。」
+
+"#;
+
+        let first = state
+            .ingest_pipe_line(event(1, 10_000, first_text, 7, 2))
+            .await
+            .unwrap()
+            .unwrap();
+        let joined = state
+            .ingest_pipe_line(event(2, 11_000, second_text, 7, 2))
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(joined.line_id, first.line_id);
+        assert_eq!(joined.text, second_text);
+        assert_eq!(state.inner.history.all_lines().len(), 1);
+    }
+
+    #[test]
+    fn progressive_text_comparison_ignores_known_tags_and_trailing_layout_whitespace() {
+        let previous = line_record(
+            1,
+            r#"<line-height=+6><size=+4><color=#956f6e>圭一</color>\n</size></line-height>「レナが来るまでずーっと待ってる。
+
+"#,
+            7,
+            2,
+            Some(AudioState::Recording {
+                started_unix_ms: 10_000,
+            }),
+        );
+        let current = event(
+            2,
+            11_000,
+            r#"<size=+4><color=#956f6e>圭一</color>\n</size>「レナが来るまでずーっと待ってる。いつまでも。」
+
+"#,
+            7,
+            2,
+        );
+
+        let decision = progressive_join_decision(&previous, &current);
+
+        assert!(decision.is_ok());
+    }
+
+    #[test]
+    fn progressive_text_comparison_rejects_equal_and_shortened_text() {
+        let previous = line_record(
+            1,
+            "<size=+4>\\n</size>same text\n\n",
+            7,
+            2,
+            Some(AudioState::Recording {
+                started_unix_ms: 10_000,
+            }),
+        );
+        let equal = event(2, 11_000, "<size=+4>\\n</size>same text", 7, 2);
+        let shortened = event(3, 12_000, "<size=+4>\\n</size>same", 7, 2);
+
+        assert_eq!(
+            progressive_join_decision(&previous, &equal)
+                .unwrap_err()
+                .reason,
+            "not_extension"
+        );
+        assert_eq!(
+            progressive_join_decision(&previous, &shortened)
+                .unwrap_err()
+                .reason,
+            "not_extension"
+        );
     }
 
     #[tokio::test]
@@ -308,6 +531,34 @@ mod tests {
                 arch: "x86".to_owned(),
                 source: "textractor".to_owned(),
             },
+        }
+    }
+
+    fn line_record(
+        line_id: LineId,
+        text: &str,
+        process_id: u32,
+        thread_number: i64,
+        audio: Option<AudioState>,
+    ) -> LineRecord {
+        LineRecord {
+            line_id,
+            line_seq: line_id,
+            timestamp_unix_ms: 10_000,
+            text: text.to_owned(),
+            meta: PipeLineMeta {
+                process_id,
+                thread_number,
+                thread_name: None,
+                window_title: None,
+                is_current_select: true,
+                arch: "x86".to_owned(),
+                source: "textractor".to_owned(),
+            },
+            screenshot: None,
+            audio,
+            warnings: Vec::new(),
+            ignored: false,
         }
     }
 

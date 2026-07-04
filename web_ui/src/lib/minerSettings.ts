@@ -16,6 +16,7 @@ export interface AnkiSettings {
 
 export interface TextFilterSettings {
   regexes: string[];
+  deduplicateMultilinePrefixes: boolean;
 }
 
 export interface MinerSettings {
@@ -41,6 +42,7 @@ export const defaultMinerSettings: MinerSettings = {
   },
   textFilters: {
     regexes: [],
+    deduplicateMultilinePrefixes: true,
   },
 };
 
@@ -100,6 +102,10 @@ function mergeSettings(settings: {
       regexes: Array.isArray(textFilters.regexes)
         ? textFilters.regexes.filter((pattern): pattern is string => typeof pattern === 'string')
         : [],
+      deduplicateMultilinePrefixes:
+        typeof textFilters.deduplicateMultilinePrefixes === 'boolean'
+          ? textFilters.deduplicateMultilinePrefixes
+          : defaultMinerSettings.textFilters.deduplicateMultilinePrefixes,
     },
   };
 }

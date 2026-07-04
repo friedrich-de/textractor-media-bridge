@@ -149,9 +149,7 @@ const {
   updateLineAudio,
 } = useBridgeLines(toast);
 
-const visibleLines = computed(() =>
-  filterLineRecords(lines.value, settings.value.textFilters.regexes),
-);
+const visibleLines = computed(() => filterLineRecords(lines.value, settings.value.textFilters));
 const latestVisibleLine = computed(() => visibleLines.value.at(-1) ?? null);
 const currentLines = computed(() => visibleLines.value);
 const characterCount = computed(() =>

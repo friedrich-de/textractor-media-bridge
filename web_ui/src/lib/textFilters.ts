@@ -1,5 +1,10 @@
 import type { LineRecord } from '@/api/types';
 
+export interface TextFilterOptions {
+  regexes: readonly string[];
+  deduplicateMultilinePrefixes: boolean;
+}
+
 export function normalizeTextFilterPatterns(patterns: readonly string[]): string[] {
   return patterns.filter((pattern) => pattern.length > 0);
 }
@@ -25,13 +30,13 @@ export function hasTextFilterErrors(errors: readonly (string | null)[]): boolean
 
 export function filterLineRecords(
   lines: readonly LineRecord[],
-  patterns: readonly string[],
+  options: TextFilterOptions,
 ): LineRecord[] {
-  const filters = compileTextFilters(patterns);
+  const filters = compileTextFilters(options.regexes);
   return lines
     .map((line) => ({
       ...line,
-      text: applyCompiledTextFilters(line.text, filters),
+      text: applyTextFilters(line.text, filters, options.deduplicateMultilinePrefixes),
     }))
     .filter((line) => line.text.trim().length > 0);
 }
@@ -62,4 +67,33 @@ function applyCompiledTextFilters(text: string, filters: readonly RegExp[]): str
     next = next.replace(filter, '');
   }
   return next;
+}
+
+function applyTextFilters(
+  text: string,
+  filters: readonly RegExp[],
+  dedupeMultilinePrefixes: boolean,
+): string {
+  const filtered = applyCompiledTextFilters(text, filters);
+  return dedupeMultilinePrefixes ? deduplicateMultilinePrefixes(filtered) : filtered;
+}
+
+export function deduplicateMultilinePrefixes(text: string): string {
+  const physicalLines = text
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const keptLines: string[] = [];
+
+  for (const line of physicalLines) {
+    const previous = keptLines.at(-1);
+    if (previous && line.startsWith(previous)) {
+      keptLines[keptLines.length - 1] = line;
+    } else {
+      keptLines.push(line);
+    }
+  }
+
+  return keptLines.join('\n');
 }
