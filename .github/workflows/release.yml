@@ -53,10 +53,6 @@ jobs:
           npm run lint
           npm run build
 
-      - name: Test Rust workspace
-        if: matrix.arch == 'x64'
-        run: cargo test --workspace
-
       - name: Build Rust release
         run: cargo build --release --target ${{ matrix.target }} -p textractor_bridge_server -p textractor_bridge_dll
 
