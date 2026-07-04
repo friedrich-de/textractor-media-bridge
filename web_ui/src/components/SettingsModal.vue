@@ -319,6 +319,16 @@ const emit = defineEmits<{
 }>();
 
 type ConnectionStatus = 'untested' | 'testing' | 'connected' | 'error';
+type AnkiFieldSetting =
+  'frontField' | 'sentenceField' | 'audioField' | 'imageField' | 'sourceField';
+
+const ankiFieldDefaults: Record<AnkiFieldSetting, string> = {
+  frontField: 'Expression',
+  sentenceField: 'Sentence',
+  audioField: 'SentenceAudio',
+  imageField: 'Picture',
+  sourceField: 'Source',
+};
 
 const localSettings = reactive<MinerSettings>(cloneMinerSettings(props.settings));
 const localAudioConfig = reactive<AudioConfig>(
@@ -387,16 +397,16 @@ function applyModelDefault(): void {
 
 function applyFieldDefaults(): void {
   const fields = modelsWithFields.value[localSettings.anki.modelName] ?? [];
-  for (const [setting, fieldName] of Object.entries({
-    frontField: 'Expression',
-    sentenceField: 'Sentence',
-    audioField: 'SentenceAudio',
-    imageField: 'Picture',
-    sourceField: 'Source',
-  })) {
-    const key = setting as keyof MinerSettings['anki'];
-    if (!localSettings.anki[key] && fields.includes(fieldName)) {
-      localSettings.anki[key] = fieldName as never;
+  const fieldSet = new Set(fields);
+
+  for (const [setting, fieldName] of Object.entries(ankiFieldDefaults)) {
+    const key = setting as AnkiFieldSetting;
+    const currentField = localSettings.anki[key].trim();
+    if (currentField && fields.length > 0 && !fieldSet.has(currentField)) {
+      localSettings.anki[key] = '';
+    }
+    if (!localSettings.anki[key] && fieldSet.has(fieldName)) {
+      localSettings.anki[key] = fieldName;
     }
   }
 }

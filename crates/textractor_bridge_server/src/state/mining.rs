@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use bridge_protocol::{
-    thread_label, AssetInfo, AudioState, LineRecord, MinePrepareRequest, MinePrepareResponse,
-    RangeScreenshotPick,
+    AssetInfo, AudioState, LineRecord, MinePrepareRequest, MinePrepareResponse, RangeScreenshotPick,
 };
 
 use crate::assets::resolve_ffmpeg_path;
@@ -45,25 +44,7 @@ impl AppState {
 
         let audio = self.prepare_audio_to_mp3(&ready_audio_assets(&lines))?;
 
-        let first = lines.first().expect("non-empty lines");
-        let last = lines.last().expect("non-empty lines");
-        let source_thread = thread_label(&first.meta);
-        let source = if first.line_id == last.line_id {
-            format!(
-                "PID {} / {} / {}",
-                first.meta.process_id,
-                source_thread,
-                iso_timestamp(first.timestamp_unix_ms)
-            )
-        } else {
-            format!(
-                "PID {} / {} / {} - {}",
-                first.meta.process_id,
-                source_thread,
-                iso_timestamp(first.timestamp_unix_ms),
-                iso_timestamp(last.timestamp_unix_ms)
-            )
-        };
+        let source = mining_source(lines.first().expect("non-empty lines"));
 
         Ok(MinePrepareResponse {
             sentence,
@@ -117,10 +98,14 @@ fn ready_audio_assets(lines: &[LineRecord]) -> Vec<AssetInfo> {
         .collect()
 }
 
-fn iso_timestamp(unix_ms: i64) -> String {
-    chrono::DateTime::<chrono::Utc>::from_timestamp_millis(unix_ms)
-        .map(|date| date.to_rfc3339())
-        .unwrap_or_else(|| unix_ms.to_string())
+fn mining_source(line: &LineRecord) -> String {
+    line.meta
+        .window_title
+        .as_deref()
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .unwrap_or_default()
+        .to_owned()
 }
 
 #[cfg(test)]
@@ -192,14 +177,34 @@ mod tests {
     }
 
     #[test]
-    fn prepare_mine_uses_thread_number_when_thread_name_is_missing() {
+    fn prepare_mine_uses_window_title_as_source() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut config = AppConfig::default();
+        config.storage.data_dir = Some(tmp.path().to_path_buf());
+        let state = AppState::load(config).unwrap();
+
+        state.inner.history.upsert(line(1, None)).unwrap();
+
+        let response = state
+            .prepare_mine(MinePrepareRequest {
+                line_ids: vec![1],
+                range_sentence_separator: None,
+                range_screenshot_pick: None,
+            })
+            .unwrap();
+
+        assert_eq!(response.source, "Game Window");
+    }
+
+    #[test]
+    fn prepare_mine_uses_empty_source_when_window_title_is_missing() {
         let tmp = tempfile::tempdir().unwrap();
         let mut config = AppConfig::default();
         config.storage.data_dir = Some(tmp.path().to_path_buf());
         let state = AppState::load(config).unwrap();
 
         let mut selected = line(1, None);
-        selected.meta.thread_name = None;
+        selected.meta.window_title = None;
         state.inner.history.upsert(selected).unwrap();
 
         let response = state
@@ -210,7 +215,7 @@ mod tests {
             })
             .unwrap();
 
-        assert!(response.source.contains("thread 1"));
+        assert_eq!(response.source, "");
     }
 
     fn line(line_seq: LineSeq, audio: Option<AudioState>) -> LineRecord {

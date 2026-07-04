@@ -4,6 +4,7 @@
       <span class="selection-count">{{ selectedCount }} selected</span>
       <span v-if="loadingTarget" class="target-preview">Loading target...</span>
       <span v-else-if="targetPreview" class="target-preview">{{ targetPreview }}</span>
+      <span v-else-if="targetError" class="target-preview warning">{{ targetError }}</span>
       <span v-else-if="ankiConfigured" class="target-preview warning">No recent target</span>
     </div>
 
@@ -68,6 +69,7 @@ import TooltipButton from '@/components/TooltipButton.vue';
 const props = defineProps<{
   selectedCount: number;
   targetPreview: string | null;
+  targetError: string | null;
   loadingTarget: boolean;
   ankiConfigured: boolean;
   canSend: boolean;

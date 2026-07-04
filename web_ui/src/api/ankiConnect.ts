@@ -60,7 +60,7 @@ export async function getModelsWithFields(endpoint: string): Promise<Record<stri
 
 export async function getLatestNote(
   endpoint: string,
-  options: { modelName: string; searchDays?: number; requiredFields?: readonly string[] },
+  options: { modelName: string; searchDays?: number; configuredFields?: readonly string[] },
 ): Promise<NoteInfo | null> {
   const query = buildNoteQuery(options.modelName, options.searchDays ?? 7);
   const noteIds = await invoke<number[]>(endpoint, 'findNotes', { query });
@@ -70,13 +70,14 @@ export async function getLatestNote(
 
   const candidates = [...noteIds].sort((a, b) => b - a).slice(0, MAX_RECENT_NOTE_CANDIDATES);
   const notes = await invoke<NoteInfo[]>(endpoint, 'notesInfo', { notes: candidates });
-  const requiredFields = normalizeRequiredFields(options.requiredFields ?? []);
+  const configuredFields = normalizeConfiguredFields(options.configuredFields ?? []);
   return (
     [...notes]
       .sort((a, b) => b.noteId - a.noteId)
       .find(
         (note) =>
-          note.modelName === options.modelName && noteHasRequiredFields(note, requiredFields),
+          note.modelName === options.modelName &&
+          noteHasEffectiveConfiguredFields(note, configuredFields),
       ) ?? null
   );
 }
@@ -121,13 +122,16 @@ function searchQualifier(name: string, value: string): string | null {
   return /^[^\s"]+$/.test(trimmed) ? `${name}:${trimmed}` : `${name}:"${trimmed}"`;
 }
 
-function normalizeRequiredFields(fields: readonly string[]): string[] {
+function normalizeConfiguredFields(fields: readonly string[]): string[] {
   return [...new Set(fields.map((field) => field.trim()).filter(Boolean))];
 }
 
-function noteHasRequiredFields(note: NoteInfo, requiredFields: readonly string[]): boolean {
+function noteHasEffectiveConfiguredFields(
+  note: NoteInfo,
+  configuredFields: readonly string[],
+): boolean {
   const noteFields = new Set(Object.keys(note.fields));
-  return requiredFields.every((field) => noteFields.has(field));
+  return configuredFields.some((field) => noteFields.has(field));
 }
 
 async function invoke<T>(endpoint: string, action: string, params?: JsonValue): Promise<T> {

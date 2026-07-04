@@ -24,6 +24,7 @@ interface UseAnkiMiningOptions {
 
 export function useAnkiMining(options: UseAnkiMiningOptions) {
   const targetCardPreview = ref<string | null>(null);
+  const targetCardError = ref<string | null>(null);
   const loadingTargetCard = ref(false);
   const sendingToAnki = ref(false);
   const previewingMedia = ref(false);
@@ -126,31 +127,40 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
     const requestId = ++previewRequestId;
     if (options.selectedLineCount.value === 0 || !ankiConfigured.value) {
       targetCardPreview.value = null;
+      targetCardError.value = null;
       loadingTargetCard.value = false;
       return;
     }
 
     loadingTargetCard.value = true;
+    targetCardError.value = null;
     try {
       const note = await getLatestNote(options.settings.value.anki.endpoint, {
         modelName: options.settings.value.anki.modelName,
-        requiredFields: configuredUpdateFields(options.settings.value.anki),
+        configuredFields: configuredUpdateFields(options.settings.value.anki),
       });
       if (requestId !== previewRequestId) {
         return;
       }
 
-      if (!note || latestNoteTooOld(note, options.settings.value.anki.maxLatestCardAgeMinutes)) {
+      if (!note) {
         targetCardPreview.value = null;
+        targetCardError.value = 'No recent compatible note';
+      } else if (latestNoteTooOld(note, options.settings.value.anki.maxLatestCardAgeMinutes)) {
+        targetCardPreview.value = null;
+        targetCardError.value = `Target older than ${options.settings.value.anki.maxLatestCardAgeMinutes} min`;
       } else {
         targetCardPreview.value = buildTargetCardPreview(
           note,
           options.settings.value.anki.frontField,
         );
+        targetCardError.value = null;
       }
-    } catch {
+    } catch (error) {
       if (requestId === previewRequestId) {
         targetCardPreview.value = null;
+        targetCardError.value =
+          error instanceof Error ? error.message : 'Unable to check Anki target';
       }
     } finally {
       if (requestId === previewRequestId) {
@@ -162,6 +172,7 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
   function resetTargetPreview(): void {
     previewRequestId += 1;
     targetCardPreview.value = null;
+    targetCardError.value = null;
     loadingTargetCard.value = false;
   }
 
@@ -169,10 +180,15 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
     const anki = options.settings.value.anki;
     const note = await getLatestNote(anki.endpoint, {
       modelName: anki.modelName,
-      requiredFields: configuredUpdateFields(anki),
+      configuredFields: configuredUpdateFields(anki),
     });
-    if (!note || latestNoteTooOld(note, anki.maxLatestCardAgeMinutes)) {
-      throw new Error('No recent Anki note found.');
+    if (!note) {
+      throw new Error('No recent compatible Anki note found.');
+    }
+    if (latestNoteTooOld(note, anki.maxLatestCardAgeMinutes)) {
+      throw new Error(
+        `Newest compatible Anki note is older than ${anki.maxLatestCardAgeMinutes} minutes.`,
+      );
     }
 
     const fields = await buildFields(prepared, note);
@@ -190,26 +206,30 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
   ): Promise<Record<string, string>> {
     const anki = options.settings.value.anki;
     const fields: Record<string, string> = {};
+    const sentenceField = anki.sentenceField.trim();
+    const sourceField = anki.sourceField.trim();
+    const imageField = anki.imageField.trim();
+    const audioField = anki.audioField.trim();
 
-    if (anki.sentenceField) {
-      fields[anki.sentenceField] = preserveHtmlTags(
-        noteFieldValue(note, anki.sentenceField),
+    if (sentenceField && noteHasField(note, sentenceField)) {
+      fields[sentenceField] = preserveHtmlTags(
+        noteFieldValue(note, sentenceField),
         prepared.sentence,
       );
     }
 
-    if (anki.sourceField) {
-      fields[anki.sourceField] = prepared.source;
+    if (sourceField && noteHasField(note, sourceField)) {
+      fields[sourceField] = prepared.source;
     }
 
-    if (anki.imageField && prepared.screenshot) {
+    if (imageField && prepared.screenshot && noteHasField(note, imageField)) {
       const storedFilename = await storePreparedAsset(prepared.screenshot.assetId);
-      fields[anki.imageField] = `<img src="${storedFilename}">`;
+      fields[imageField] = `<img src="${storedFilename}">`;
     }
 
-    if (anki.audioField && prepared.audio) {
+    if (audioField && prepared.audio && noteHasField(note, audioField)) {
       const storedFilename = await storePreparedAsset(prepared.audio.assetId);
-      fields[anki.audioField] = `[sound:${storedFilename}]`;
+      fields[audioField] = `[sound:${storedFilename}]`;
     }
 
     return fields;
@@ -222,6 +242,7 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
 
   return {
     targetCardPreview,
+    targetCardError,
     loadingTargetCard,
     sendingToAnki,
     previewingMedia,
@@ -241,18 +262,22 @@ function latestNoteTooOld(note: NoteInfo, maxAgeMinutes: number): boolean {
 }
 
 function configuredUpdateFields(anki: MinerSettings['anki']): string[] {
-  return [anki.sentenceField, anki.audioField, anki.imageField, anki.sourceField].filter(
-    (field): field is string => field.trim().length > 0,
-  );
+  return [anki.sentenceField, anki.audioField, anki.imageField, anki.sourceField]
+    .map((field) => field.trim())
+    .filter((field) => field.length > 0);
 }
 
 function noteFieldValue(note: NoteInfo, fieldName: string): string {
   return note.fields[fieldName]?.value ?? '';
 }
 
+function noteHasField(note: NoteInfo, fieldName: string): boolean {
+  return Boolean(fieldName && note.fields[fieldName]);
+}
+
 function buildTargetCardPreview(note: NoteInfo, frontField: string): string {
   const rawPreview =
-    (frontField ? note.fields[frontField]?.value : undefined) ??
+    (frontField.trim() ? note.fields[frontField.trim()]?.value : undefined) ??
     Object.values(note.fields).find((field) => field.value)?.value ??
     `Note ${note.noteId}`;
   const stripped = stripHtml(rawPreview);

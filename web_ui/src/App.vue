@@ -56,6 +56,7 @@
       v-if="selectedLineCount > 0"
       :selected-count="selectedLineCount"
       :target-preview="targetCardPreview"
+      :target-error="targetCardError"
       :loading-target="loadingTargetCard"
       :anki-configured="ankiConfigured"
       :can-send="canSendToAnki"
@@ -169,6 +170,7 @@ const {
 
 const {
   targetCardPreview,
+  targetCardError,
   loadingTargetCard,
   sendingToAnki,
   previewingMedia,

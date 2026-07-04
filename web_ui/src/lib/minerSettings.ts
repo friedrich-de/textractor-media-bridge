@@ -33,7 +33,7 @@ export const defaultMinerSettings: MinerSettings = {
     sentenceField: 'Sentence',
     audioField: 'SentenceAudio',
     imageField: 'Picture',
-    sourceField: 'Source',
+    sourceField: '',
     maxLatestCardAgeMinutes: 5,
     rangeSentenceSeparator: ' ',
     rangeScreenshotPick: 'last',
