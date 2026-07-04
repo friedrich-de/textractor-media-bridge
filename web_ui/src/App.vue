@@ -1,30 +1,30 @@
 <template>
   <main class="app-shell">
     <nav class="floating-controls" aria-label="Reader controls">
-      <button
+      <TooltipButton
         class="icon-button"
         type="button"
-        aria-label="Scroll transcript to top"
+        tooltip="Scroll transcript to top"
         @click="scrollTranscriptTop"
       >
         <ArrowUp :size="18" />
-      </button>
-      <button
+      </TooltipButton>
+      <TooltipButton
         class="icon-button"
         type="button"
-        aria-label="Scroll to newest text"
+        tooltip="Scroll to newest text"
         @click="scrollToNewest"
       >
         <LocateFixed :size="18" />
-      </button>
-      <button
+      </TooltipButton>
+      <TooltipButton
         class="icon-button"
         type="button"
-        aria-label="Mining settings"
+        tooltip="Mining settings"
         @click="showSettings = true"
       >
         <Settings :size="18" />
-      </button>
+      </TooltipButton>
     </nav>
 
     <ReaderView
@@ -100,6 +100,7 @@ import AudioTrimModal from '@/components/AudioTrimModal.vue';
 import MediaPreviewModal from '@/components/MediaPreviewModal.vue';
 import ReaderView from '@/components/ReaderView.vue';
 import SelectionBar from '@/components/SelectionBar.vue';
+import TooltipButton from '@/components/TooltipButton.vue';
 import SettingsModal from '@/components/SettingsModal.vue';
 import ToastStack from '@/components/ToastStack.vue';
 import { useAnkiMining } from '@/composables/useAnkiMining';

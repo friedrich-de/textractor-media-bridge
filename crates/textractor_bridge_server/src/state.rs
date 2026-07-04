@@ -5,7 +5,9 @@ mod mining;
 mod screenshots;
 
 use anyhow::{Context, Result};
-use bridge_protocol::{BrowserEvent, LineId, LinePatch, LineSeq, LineUpdatedEvent};
+use bridge_protocol::{
+    BrowserEvent, LineId, LinePatch, LineSeq, LineUpdatedEvent, LinesClearedEvent,
+};
 use parking_lot::RwLock;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::broadcast;
@@ -138,6 +140,14 @@ impl AppState {
                 line_seq,
                 patch,
             }),
+        );
+    }
+
+    fn broadcast_lines_cleared(&self, id: LineSeq, cleared_lines: usize) {
+        self.broadcast(
+            id,
+            "lines_cleared",
+            BrowserEvent::LinesCleared(LinesClearedEvent { cleared_lines }),
         );
     }
 

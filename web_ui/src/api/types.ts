@@ -161,6 +161,11 @@ export interface BrowserLineUpdatedPayload {
   patch: LinePatch;
 }
 
+export interface BrowserLinesClearedPayload {
+  type: 'lines_cleared';
+  clearedLines: number;
+}
+
 export interface BrowserErrorPayload {
   type: 'error';
   code: string;
@@ -168,4 +173,8 @@ export interface BrowserErrorPayload {
 }
 
 export type BrowserEventPayload =
-  BrowserHelloPayload | BrowserLineAddedPayload | BrowserLineUpdatedPayload | BrowserErrorPayload;
+  | BrowserHelloPayload
+  | BrowserLineAddedPayload
+  | BrowserLineUpdatedPayload
+  | BrowserLinesClearedPayload
+  | BrowserErrorPayload;

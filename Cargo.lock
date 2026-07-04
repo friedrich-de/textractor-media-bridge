@@ -1139,7 +1139,6 @@ name = "textractor_bridge_dll"
 version = "0.1.15"
 dependencies = [
  "bridge_protocol",
- "crossbeam-channel",
  "serde_json",
  "windows-sys",
 ]

@@ -68,10 +68,7 @@ export function useBridgeLines(toast: ToastApi) {
 
   async function clearLines(): Promise<void> {
     await clearServerLines();
-    lines.value = [];
-    newestSeq.value = 0;
-    oldestSeq.value = null;
-    hasMoreOlder.value = false;
+    clearLocalLines();
   }
 
   async function finishLineAudio(lineId: LineId): Promise<void> {
@@ -121,6 +118,13 @@ export function useBridgeLines(toast: ToastApi) {
       }
       patchLine(payload.lineId, payload.patch);
     });
+    eventSource.addEventListener('lines_cleared', (event) => {
+      const payload = parseBrowserEvent(event);
+      if (payload.type !== 'lines_cleared') {
+        return;
+      }
+      clearLocalLines();
+    });
     eventSource.addEventListener('error', () => {
       status.value = 'reconnecting';
       window.setTimeout(() => {
@@ -168,6 +172,13 @@ export function useBridgeLines(toast: ToastApi) {
         warnings: patch.warnings ?? line.warnings,
       };
     });
+  }
+
+  function clearLocalLines(): void {
+    lines.value = [];
+    newestSeq.value = 0;
+    oldestSeq.value = null;
+    hasMoreOlder.value = false;
   }
 
   onBeforeUnmount(() => {

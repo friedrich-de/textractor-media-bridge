@@ -27,8 +27,11 @@ impl AppState {
     }
 
     pub fn clear_lines(&self) -> Result<usize> {
+        let event_id = self.inner.history.newest_seq().unwrap_or(0);
         self.inner.audio.clear_sessions();
-        Ok(self.inner.history.clear()?)
+        let cleared_lines = self.inner.history.clear()?;
+        self.broadcast_lines_cleared(event_id, cleared_lines);
+        Ok(cleared_lines)
     }
 
     pub async fn ingest_pipe_line(&self, mut event: PipeLineEvent) -> Result<Option<LineRecord>> {
@@ -488,6 +491,34 @@ mod tests {
             .unwrap();
 
         assert_eq!(state.inner.history.all_lines().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn clear_lines_clears_history_and_broadcasts_event() {
+        let (_tmp, state) = test_state(true, "off");
+        let mut events = state.subscribe();
+
+        state
+            .ingest_pipe_line(event(1, 10_000, "first", 7, 2))
+            .await
+            .unwrap();
+        state
+            .ingest_pipe_line(event(2, 11_000, "second", 7, 2))
+            .await
+            .unwrap();
+        while events.try_recv().is_ok() {}
+
+        let cleared = state.clear_lines().unwrap();
+
+        assert_eq!(cleared, 2);
+        assert!(state.inner.history.all_lines().is_empty());
+        let event = events.recv().await.unwrap();
+        assert_eq!(event.event_name, "lines_cleared");
+        assert_eq!(event.id, 2);
+        assert!(matches!(
+            event.payload,
+            BrowserEvent::LinesCleared(bridge_protocol::LinesClearedEvent { cleared_lines: 2 })
+        ));
     }
 
     fn test_state(

@@ -25,54 +25,52 @@
               <p>{{ line.text }}</p>
             </div>
             <div class="cue-actions">
-              <button
+              <TooltipButton
                 class="icon-button small"
                 type="button"
-                aria-label="Copy text"
+                tooltip="Copy text"
                 @click.stop="emit('copyLine', line)"
               >
                 <ClipboardCopy :size="16" />
-              </button>
-              <button
+              </TooltipButton>
+              <TooltipButton
                 class="icon-button small"
                 type="button"
                 :disabled="!line.screenshot"
-                aria-label="Preview screenshot"
+                :tooltip="screenshotButtonTooltip(line)"
                 @click.stop="emit('previewImage', line)"
               >
                 <ImageIcon :size="16" />
-              </button>
-              <button
+              </TooltipButton>
+              <TooltipButton
                 class="icon-button small"
                 type="button"
                 :disabled="audioButtonDisabled(line)"
-                :aria-label="
-                  line.audio?.status === 'recording' ? 'Finish audio recording' : 'Preview audio'
-                "
+                :tooltip="audioButtonTooltip(line)"
                 @click.stop="onAudioClick(line)"
               >
                 <LoaderCircle v-if="line.audio?.status === 'recording'" class="spin" :size="16" />
                 <Volume2 v-else :size="16" />
-              </button>
-              <button
+              </TooltipButton>
+              <TooltipButton
                 class="icon-button small"
                 type="button"
                 :disabled="trimButtonDisabled(line)"
-                :aria-label="trimButtonRecording(line) ? 'Finish trim recording' : 'Trim audio'"
+                :tooltip="trimButtonTooltip(line)"
                 @click.stop="onTrimClick(line)"
               >
                 <LoaderCircle v-if="trimButtonRecording(line)" class="spin" :size="16" />
                 <Scissors v-else :size="16" />
-              </button>
-              <button
+              </TooltipButton>
+              <TooltipButton
                 class="icon-button small"
                 type="button"
                 :disabled="removeAudioButtonDisabled(line)"
-                aria-label="Remove audio from line"
+                :tooltip="removeAudioButtonTooltip(line)"
                 @click.stop="emit('removeAudio', line)"
               >
                 <VolumeX :size="16" />
-              </button>
+              </TooltipButton>
             </div>
           </div>
         </div>
@@ -95,6 +93,7 @@ import {
 } from '@lucide/vue';
 
 import type { LineId, LineRecord } from '@/api/types';
+import TooltipButton from '@/components/TooltipButton.vue';
 
 const props = defineProps<{
   lines: readonly LineRecord[];
@@ -147,6 +146,20 @@ function audioButtonDisabled(line: LineRecord): boolean {
   return line.audio?.status !== 'recording' && line.audio?.status !== 'ready';
 }
 
+function audioButtonTooltip(line: LineRecord): string {
+  if (line.audio?.status === 'recording') {
+    return 'Stop recording audio';
+  }
+  if (line.audio?.status === 'ready') {
+    return 'Replay recorded audio';
+  }
+  return 'No recorded audio';
+}
+
+function screenshotButtonTooltip(line: LineRecord): string {
+  return line.screenshot ? 'Preview screenshot' : 'No screenshot available';
+}
+
 function trimButtonRecording(line: LineRecord): boolean {
   return (
     line.audio?.status === 'recording' ||
@@ -158,8 +171,22 @@ function trimButtonDisabled(line: LineRecord): boolean {
   return !trimButtonRecording(line) && line.audio?.status !== 'ready';
 }
 
+function trimButtonTooltip(line: LineRecord): string {
+  if (trimButtonRecording(line)) {
+    return 'Stop recording trimmable audio';
+  }
+  if (line.audio?.status === 'ready') {
+    return 'Trim recorded audio';
+  }
+  return 'No trimmable audio';
+}
+
 function removeAudioButtonDisabled(line: LineRecord): boolean {
   return line.audio?.status !== 'recording' && line.audio?.status !== 'ready';
+}
+
+function removeAudioButtonTooltip(line: LineRecord): string {
+  return removeAudioButtonDisabled(line) ? 'No audio to remove' : 'Remove audio from this line';
 }
 
 function scrollToTop(): void {

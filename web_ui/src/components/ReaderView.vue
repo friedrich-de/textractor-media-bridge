@@ -7,42 +7,47 @@
       </div>
 
       <div class="toolbar-cluster">
-        <button
+        <TooltipButton
           class="secondary-action track-toggle"
           :class="{ active: follow }"
           type="button"
           :aria-pressed="follow"
-          :aria-label="follow ? 'Disable line tracking' : 'Enable line tracking'"
+          :tooltip="follow ? 'Stop following latest line' : 'Follow latest line'"
           @click="emit('toggleFollow')"
         >
           <LocateFixed :size="18" />
           <span>{{ follow ? 'Tracking' : 'Track' }}</span>
-        </button>
-        <button
+        </TooltipButton>
+        <TooltipButton
           class="time-pill"
           type="button"
-          aria-label="Scroll to latest text line"
+          tooltip="Jump to latest line"
           @click="scrollToLatest"
         >
           <Clock3 :size="16" />
           <span>{{ latestLine ? formatTime(latestLine.timestampUnixMs) : '--:--' }}</span>
           <span>/ {{ lines.length }} lines</span>
-        </button>
+        </TooltipButton>
         <span class="stat-pill">{{ formattedCharacterCount }} chars</span>
-        <button
+        <TooltipButton
           class="secondary-action danger compact-text-action"
           type="button"
           :disabled="clearableLineCount === 0 || clearingLines"
-          aria-label="Clear transcript lines"
+          :tooltip="clearingLines ? 'Clearing transcript' : 'Clear transcript lines'"
           @click="emit('clearLines')"
         >
           <LoaderCircle v-if="clearingLines" class="spin" :size="18" />
           <Trash2 v-else :size="18" />
           <span>Clear</span>
-        </button>
-        <button class="icon-button" type="button" aria-label="Reload lines" @click="emit('reload')">
+        </TooltipButton>
+        <TooltipButton
+          class="icon-button"
+          type="button"
+          tooltip="Reload lines"
+          @click="emit('reload')"
+        >
           <RefreshCw :size="18" />
-        </button>
+        </TooltipButton>
       </div>
     </header>
 
@@ -70,6 +75,7 @@ import { Clock3, Gamepad2, LoaderCircle, LocateFixed, RefreshCw, Trash2 } from '
 import type { LiveStatus } from '@/composables/useBridgeLines';
 import type { LineId, LineRecord } from '@/api/types';
 import LineTranscript from '@/components/LineTranscript.vue';
+import TooltipButton from '@/components/TooltipButton.vue';
 
 type TranscriptHandle = {
   scrollToTop: () => void;

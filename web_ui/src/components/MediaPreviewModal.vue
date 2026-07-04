@@ -7,14 +7,14 @@
             <p>Image</p>
             <h2>Preview</h2>
           </div>
-          <button
+          <TooltipButton
             class="icon-button"
             type="button"
-            aria-label="Close preview"
+            tooltip="Close preview"
             @click="emit('close')"
           >
             <X :size="18" />
-          </button>
+          </TooltipButton>
         </header>
 
         <div class="media-preview">
@@ -27,6 +27,8 @@
 
 <script setup lang="ts">
 import { X } from '@lucide/vue';
+
+import TooltipButton from '@/components/TooltipButton.vue';
 
 defineProps<{
   url: string;

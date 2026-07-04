@@ -12,14 +12,14 @@
             <p>Mining</p>
             <h2 id="settings-title">Settings</h2>
           </div>
-          <button
+          <TooltipButton
             class="icon-button"
             type="button"
-            aria-label="Close settings"
+            tooltip="Close settings"
             @click="emit('cancel')"
           >
             <X :size="18" />
-          </button>
+          </TooltipButton>
         </header>
 
         <div class="modal-body">
@@ -226,14 +226,14 @@
                     {{ regexErrors[index] }}
                   </span>
                 </label>
-                <button
+                <TooltipButton
                   class="icon-button small danger"
                   type="button"
-                  aria-label="Remove regex filter"
+                  tooltip="Remove regex filter"
                   @click="removeRegexFilter(index)"
                 >
                   <Trash2 :size="16" />
-                </button>
+                </TooltipButton>
               </div>
             </div>
           </section>
@@ -285,6 +285,7 @@ import { LoaderCircle, PlugZap, Plus, RefreshCw, RotateCcw, Trash2, X } from '@l
 import { getModelsWithFields } from '@/api/ankiConnect';
 import type { AudioConfig, LineConfig } from '@/api/types';
 import type { MinerSettings } from '@/lib/minerSettings';
+import TooltipButton from '@/components/TooltipButton.vue';
 import { cloneMinerSettings, defaultMinerSettings } from '@/lib/minerSettings';
 import {
   hasTextFilterErrors,

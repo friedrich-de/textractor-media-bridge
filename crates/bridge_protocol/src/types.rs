@@ -90,6 +90,12 @@ pub struct LineUpdatedEvent {
     pub patch: LinePatch,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinesClearedEvent {
+    pub cleared_lines: usize,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinePatch {
@@ -109,6 +115,7 @@ pub enum BrowserEvent {
     Hello(BrowserHello),
     LineAdded(BrowserLineAddedEvent),
     LineUpdated(LineUpdatedEvent),
+    LinesCleared(LinesClearedEvent),
     Error(ErrorEvent),
 }
 
@@ -285,6 +292,17 @@ mod tests {
         };
 
         assert_eq!(thread_label(&meta), "thread 17");
+    }
+
+    #[test]
+    fn browser_event_serializes_lines_cleared() {
+        let event = BrowserEvent::LinesCleared(LinesClearedEvent { cleared_lines: 3 });
+
+        let json = serde_json::to_string(&event).expect("event serializes");
+
+        assert_eq!(json, r#"{"type":"lines_cleared","clearedLines":3}"#);
+        let decoded: BrowserEvent = serde_json::from_str(&json).expect("event deserializes");
+        assert_eq!(decoded, event);
     }
 
     #[test]

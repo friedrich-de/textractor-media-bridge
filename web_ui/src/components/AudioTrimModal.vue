@@ -12,9 +12,14 @@
             <p>Audio</p>
             <h2 id="audio-trim-title">Trim</h2>
           </div>
-          <button class="icon-button" type="button" aria-label="Close trim" @click="emit('close')">
+          <TooltipButton
+            class="icon-button"
+            type="button"
+            tooltip="Close trim"
+            @click="emit('close')"
+          >
             <X :size="18" />
-          </button>
+          </TooltipButton>
         </header>
 
         <div class="modal-body audio-trim-body">
@@ -153,6 +158,7 @@ import { LoaderCircle, Pause, Play, RotateCcw, Save, X } from '@lucide/vue';
 import { applyAudioTrim } from '@/api/bridge';
 import type { AudioState, AudioTrimInfoResponse, LineId, LineRecord } from '@/api/types';
 import { useTrimRangeDrag } from '@/composables/useTrimRangeDrag';
+import TooltipButton from '@/components/TooltipButton.vue';
 import { loadAudioTrim } from '@/lib/audioTrimLoader';
 import { createPcm16WavClipUrl, type DecodedPcm16Wav } from '@/lib/wavPreview';
 

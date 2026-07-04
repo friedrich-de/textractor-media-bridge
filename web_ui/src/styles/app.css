@@ -181,6 +181,49 @@ select:focus-visible {
   color: var(--teal);
 }
 
+.tooltip-button {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.tooltip-button::after {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  z-index: 70;
+  max-width: min(220px, 72vw);
+  padding: 7px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: rgba(10, 12, 14, 0.96);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.34);
+  color: var(--text);
+  content: attr(data-tooltip);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+  white-space: normal;
+}
+
+.tooltip-button:hover::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.tooltip-button:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
+}
+
 .spin {
   animation: spin 0.9s linear infinite;
 }

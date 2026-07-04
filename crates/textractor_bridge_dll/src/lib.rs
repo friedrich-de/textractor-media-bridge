@@ -1,17 +1,12 @@
 #![allow(clippy::missing_safety_doc)]
 
 use bridge_protocol::{default_pipe_name, write_frame, PipeLineEvent, PipeLineMeta};
-use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
 use sentence_info::{parse_sentence_info, ParsedSentenceInfo};
 use std::{
     fs::{File, OpenOptions},
     io::Write,
     panic::{catch_unwind, AssertUnwindSafe},
-    sync::{
-        atomic::{AtomicI64, AtomicU64, Ordering},
-        OnceLock,
-    },
-    thread,
+    sync::atomic::{AtomicI64, AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -19,11 +14,9 @@ mod sentence_info;
 
 pub use sentence_info::InfoForExtension;
 
-const QUEUE_CAPACITY: usize = 256;
 const BOOTSTRAP_BACKOFF_MS: i64 = 5_000;
 
 static MESSAGE_ID: AtomicU64 = AtomicU64::new(1);
-static QUEUE: OnceLock<Sender<PipeLineEvent>> = OnceLock::new();
 static LAST_BOOTSTRAP_ATTEMPT_MS: AtomicI64 = AtomicI64::new(0);
 
 #[no_mangle]
@@ -66,64 +59,22 @@ fn handle_new_sentence(sentence: *const u16, sentence_info: *const InfoForExtens
         meta,
     );
 
-    match sender().try_send(event) {
-        Ok(()) => {}
-        Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {}
-    }
+    send_event_to_server(event);
 }
 
 fn should_forward(info: &ParsedSentenceInfo) -> bool {
     info.current_select != 0 && info.text_number != 0 && info.text_number != 1
 }
 
-fn sender() -> &'static Sender<PipeLineEvent> {
-    QUEUE.get_or_init(|| {
-        let (tx, rx) = bounded(QUEUE_CAPACITY);
-        let _ = thread::Builder::new()
-            .name("textractor-media-bridge-pipe".to_owned())
-            .spawn(move || pipe_worker(rx));
-        tx
-    })
-}
-
-fn pipe_worker(rx: Receiver<PipeLineEvent>) {
+fn send_event_to_server(event: PipeLineEvent) {
     let pipe_name = default_pipe_name();
-    let mut pipe: Option<File> = None;
+    let Some(mut pipe) = connect_pipe(&pipe_name) else {
+        maybe_bootstrap_server("pipe open failed");
+        return;
+    };
 
-    while let Ok(event) = rx.recv() {
-        if pipe.is_none() {
-            pipe = connect_pipe(&pipe_name);
-        }
-
-        match pipe.as_mut() {
-            Some(file) => {
-                if write_frame(file, &event).is_err() {
-                    pipe = None;
-                    maybe_bootstrap_server();
-                }
-            }
-            None => {
-                maybe_bootstrap_server();
-            }
-        }
-
-        while let Ok(next) = rx.try_recv() {
-            if pipe.is_none() {
-                pipe = connect_pipe(&pipe_name);
-            }
-            match pipe.as_mut() {
-                Some(file) => {
-                    if write_frame(file, &next).is_err() {
-                        pipe = None;
-                        break;
-                    }
-                }
-                None => {
-                    pipe = None;
-                    break;
-                }
-            }
-        }
+    if write_frame(&mut pipe, &event).is_err() {
+        maybe_bootstrap_server("pipe write failed");
     }
 }
 
@@ -131,7 +82,7 @@ fn connect_pipe(pipe_name: &str) -> Option<File> {
     OpenOptions::new().write(true).open(pipe_name).ok()
 }
 
-fn maybe_bootstrap_server() {
+fn maybe_bootstrap_server(reason: &str) {
     let now = unix_ms_now();
     let previous = LAST_BOOTSTRAP_ATTEMPT_MS.load(Ordering::Relaxed);
     if now.saturating_sub(previous) < BOOTSTRAP_BACKOFF_MS {
@@ -144,11 +95,11 @@ fn maybe_bootstrap_server() {
         return;
     }
 
-    platform_bootstrap_server();
+    platform_bootstrap_server(reason);
 }
 
 #[cfg(windows)]
-fn platform_bootstrap_server() {
+fn platform_bootstrap_server(reason: &str) {
     use std::{
         ffi::OsStr,
         os::windows::{ffi::OsStrExt, process::CommandExt},
@@ -167,12 +118,12 @@ fn platform_bootstrap_server() {
         .as_ref()
         .map(|dir| dir.join("config").join("bridge.toml"))
         .filter(|path| path.is_file());
-    let cmd = clean_cmd_path();
 
     append_bootstrap_log(
         server_dir.as_deref(),
         &format!(
-            "bootstrap requested; current_exe={}; current_dir={}; server_exe={}; server_exists={}; config={}; cmd={}; cmd_exists={}",
+            "bootstrap requested; reason={}; current_exe={}; current_dir={}; server_exe={}; server_exists={}; config={}",
+            reason,
             std::env::current_exe()
                 .map(|path| path.display().to_string())
                 .unwrap_or_else(|error| format!("<error: {error}>")),
@@ -185,12 +136,9 @@ fn platform_bootstrap_server() {
                 .as_ref()
                 .map(|path| path.display().to_string())
                 .unwrap_or_else(|| "<none>".to_owned()),
-            cmd.as_ref()
-                .map(|path| path.display().to_string())
-                .unwrap_or_else(|| "<none>".to_owned()),
-            cmd.as_ref().map(|path| path.is_file()).unwrap_or(false),
         ),
     );
+    remove_legacy_launcher_script(server_dir.as_deref());
 
     let mutex_name: Vec<u16> = OsStr::new("Local\\TextractorMediaBridgeServerBootstrap_v1")
         .encode_wide()
@@ -215,52 +163,7 @@ fn platform_bootstrap_server() {
             return;
         }
 
-        if let Err(error) = spawn_server_via_clean_cmd(
-            cmd.as_deref(),
-            &exe,
-            server_dir.as_deref(),
-            config.as_deref(),
-        ) {
-            append_bootstrap_log(
-                server_dir.as_deref(),
-                &format!("clean cmd launcher failed: {error}; trying direct spawn"),
-            );
-            let mut command = Command::new(&exe);
-            if let Some(dir) = server_dir.as_deref() {
-                command.current_dir(dir);
-            }
-            if let Some(config) = config.as_deref() {
-                command.arg("--config").arg(config);
-            }
-            let result = command
-                .creation_flags(CREATE_NO_WINDOW)
-                .stdin(Stdio::null())
-                .stdout(log_stdio(
-                    server_dir.as_deref(),
-                    "textractor_bridge_server.autostart.stdout.log",
-                ))
-                .stderr(log_stdio(
-                    server_dir.as_deref(),
-                    "textractor_bridge_server.autostart.stderr.log",
-                ))
-                .spawn();
-            match result {
-                Ok(child) => append_bootstrap_log(
-                    server_dir.as_deref(),
-                    &format!("spawned server directly; pid={}", child.id()),
-                ),
-                Err(error) => append_bootstrap_log(
-                    server_dir.as_deref(),
-                    &format!(
-                        "direct server spawn failed; error={}; raw_os_error={:?}",
-                        error,
-                        error.raw_os_error()
-                    ),
-                ),
-            }
-        } else {
-            append_bootstrap_log(server_dir.as_deref(), "spawned clean cmd launcher");
-        }
+        spawn_server_directly(&exe, server_dir.as_deref(), config.as_deref());
 
         let _ = CloseHandle(mutex);
     }
@@ -288,27 +191,16 @@ fn platform_bootstrap_server() {
             .and_then(|path| path.parent().map(Path::to_path_buf))
     }
 
-    fn spawn_server_via_clean_cmd(
-        cmd: Option<&Path>,
-        exe: &Path,
-        server_dir: Option<&Path>,
-        config: Option<&Path>,
-    ) -> Result<u32, String> {
-        let Some(cmd) = cmd else {
-            return Err("WINDIR was unavailable".to_owned());
-        };
-        if !cmd.is_file() {
-            return Err(format!("cmd launcher was not found: {}", cmd.display()));
-        };
-
-        let script = write_launcher_script(exe, server_dir, config)?;
-
-        let mut command = Command::new(cmd);
-        command.arg("/D").arg("/C").arg(&script);
+    fn spawn_server_directly(exe: &Path, server_dir: Option<&Path>, config: Option<&Path>) {
+        let mut command = Command::new(exe);
         if let Some(dir) = server_dir {
             command.current_dir(dir);
         }
-        command
+        if let Some(config) = config {
+            command.arg("--config").arg(config);
+        }
+
+        let result = command
             .creation_flags(CREATE_NO_WINDOW)
             .stdin(Stdio::null())
             .stdout(log_stdio(
@@ -319,65 +211,44 @@ fn platform_bootstrap_server() {
                 server_dir,
                 "textractor_bridge_server.autostart.stderr.log",
             ))
-            .spawn()
-            .map(|child| child.id())
-            .map_err(|error| {
-                format!(
-                    "{}; raw_os_error={:?}; cmd={}; script={}",
+            .spawn();
+
+        match result {
+            Ok(child) => append_bootstrap_log(
+                server_dir,
+                &format!("spawned server directly; pid={}", child.id()),
+            ),
+            Err(error) => append_bootstrap_log(
+                server_dir,
+                &format!(
+                    "direct server spawn failed; error={}; raw_os_error={:?}",
                     error,
-                    error.raw_os_error(),
-                    cmd.display(),
-                    script.display()
-                )
-            })
-    }
-
-    fn write_launcher_script(
-        exe: &Path,
-        server_dir: Option<&Path>,
-        config: Option<&Path>,
-    ) -> Result<PathBuf, String> {
-        let script = server_dir
-            .map(|dir| dir.join("textractor_bridge_server.autostart.cmd"))
-            .unwrap_or_else(|| PathBuf::from("textractor_bridge_server.autostart.cmd"));
-        let mut command = cmd_quote(exe);
-        if let Some(config) = config {
-            command.push_str(" --config ");
-            command.push_str(&cmd_quote(config));
+                    error.raw_os_error()
+                ),
+            ),
         }
-        let contents = format!(
-            "@echo off\r\n\
-             echo [bootstrap-wrapper] started %DATE% %TIME%\r\n\
-             echo [bootstrap-wrapper] cd=%CD%\r\n\
-             echo [bootstrap-wrapper] command={command}\r\n\
-             if not exist {exe} echo [bootstrap-wrapper] missing server exe: {exe}\r\n\
-             {command}\r\n\
-             set BRIDGE_EXIT=%ERRORLEVEL%\r\n\
-             echo [bootstrap-wrapper] server exited with %BRIDGE_EXIT%\r\n\
-             exit /b %BRIDGE_EXIT%\r\n",
-            exe = cmd_quote(exe),
-        );
-        std::fs::write(&script, contents).map_err(|error| {
-            format!(
-                "failed to write launcher script {}: {error}",
-                script.display()
-            )
-        })?;
-        Ok(script)
     }
 
-    fn clean_cmd_path() -> Option<PathBuf> {
-        let windir = std::env::var_os("WINDIR").map(PathBuf::from)?;
-        let path = if cfg!(target_arch = "x86") {
-            windir.join("Sysnative").join("cmd.exe")
-        } else {
-            windir.join("System32").join("cmd.exe")
+    fn remove_legacy_launcher_script(server_dir: Option<&Path>) {
+        let Some(server_dir) = server_dir else {
+            return;
         };
-        Some(path)
-    }
-
-    fn cmd_quote(path: &Path) -> String {
-        format!("\"{}\"", path.display())
+        let script = server_dir.join("textractor_bridge_server.autostart.cmd");
+        match std::fs::remove_file(&script) {
+            Ok(()) => append_bootstrap_log(
+                Some(server_dir),
+                &format!("removed legacy launcher script {}", script.display()),
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => append_bootstrap_log(
+                Some(server_dir),
+                &format!(
+                    "failed to remove legacy launcher script {}; error={}",
+                    script.display(),
+                    error
+                ),
+            ),
+        }
     }
 
     fn log_stdio(server_dir: Option<&Path>, name: &str) -> Stdio {
@@ -404,7 +275,7 @@ fn platform_bootstrap_server() {
 }
 
 #[cfg(not(windows))]
-fn platform_bootstrap_server() {}
+fn platform_bootstrap_server(_reason: &str) {}
 
 fn utf16_ptr_to_string_lossy(ptr: *const u16) -> String {
     if ptr.is_null() {

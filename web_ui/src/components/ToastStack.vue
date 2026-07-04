@@ -5,9 +5,13 @@
       <button v-if="toast.action" type="button" @click="toast.action.onClick">
         {{ toast.action.label }}
       </button>
-      <button type="button" aria-label="Dismiss" @click="emit('dismiss', toast.id)">
+      <TooltipButton
+        type="button"
+        tooltip="Dismiss notification"
+        @click="emit('dismiss', toast.id)"
+      >
         <X :size="15" />
-      </button>
+      </TooltipButton>
     </div>
   </div>
 </template>
@@ -16,6 +20,7 @@
 import { X } from '@lucide/vue';
 
 import type { Toast } from '@/composables/useToast';
+import TooltipButton from '@/components/TooltipButton.vue';
 
 defineProps<{
   toasts: readonly Toast[];
