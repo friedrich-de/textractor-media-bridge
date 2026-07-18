@@ -1,5 +1,21 @@
 # Development
 
+## Dev Container
+
+Open the repository in VS Code and run **Dev Containers: Reopen in Container**. The container
+installs Rust, Node.js 22, the Vue/TypeScript toolchain, Codex, and the Clang/LLD tooling needed to
+cross-compile the Windows MSVC targets. It also runs `npm ci` and builds the web UI on first create.
+
+The Codex login cache is mounted from the host at `~/.codex/auth.json`. Keep that file private; it
+contains access credentials.
+
+Build the Windows release artifacts with the VS Code build tasks, or from the container terminal:
+
+```bash
+cargo xwin build --release --target x86_64-pc-windows-msvc -p textractor_bridge_server -p textractor_bridge_dll
+cargo xwin build --release --target i686-pc-windows-msvc -p textractor_bridge_server -p textractor_bridge_dll
+```
+
 ## Local Server
 
 Debug runs keep normal console behavior:

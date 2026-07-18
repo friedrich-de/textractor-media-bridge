@@ -1,0 +1,49 @@
+{
+  "name": "Textractor Media Bridge",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "22"
+    }
+  },
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+  "containerEnv": {
+    "XWIN_ARCH": "x86,x86_64",
+    "XWIN_CACHE_DIR": "/home/vscode/.cache/cargo-xwin"
+  },
+  "runArgs": [
+    "--volume",
+    "${localEnv:HOME}/.codex/auth.json:/home/vscode/.codex/auth.json:z"
+  ],
+  "postCreateCommand": "npm ci --prefix web_ui && npm run build --prefix web_ui",
+  "forwardPorts": [5173, 6677, 7788],
+  "portsAttributes": {
+    "5173": {
+      "label": "Vue development server"
+    },
+    "6677": {
+      "label": "Textractor WebSocket"
+    },
+    "7788": {
+      "label": "Textractor bridge server"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "fill-labs.dependi",
+        "ms-azuretools.vscode-containers",
+        "openai.chatgpt",
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "usernamehw.errorlens",
+        "Vue.volar"
+      ]
+    }
+  }
+}

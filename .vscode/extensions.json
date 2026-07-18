@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "fill-labs.dependi",
+    "ms-azuretools.vscode-containers",
+    "openai.chatgpt",
+    "rust-lang.rust-analyzer",
+    "tamasfe.even-better-toml",
+    "usernamehw.errorlens",
+    "Vue.volar"
+  ]
+}

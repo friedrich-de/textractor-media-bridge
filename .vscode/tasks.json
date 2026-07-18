@@ -1,0 +1,120 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Frontend: install",
+      "type": "process",
+      "command": "npm",
+      "args": ["ci"],
+      "options": {
+        "cwd": "${workspaceFolder}/web_ui"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Frontend: dev",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "options": {
+        "cwd": "${workspaceFolder}/web_ui"
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Frontend: check",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "format:check"],
+      "options": {
+        "cwd": "${workspaceFolder}/web_ui"
+      },
+      "dependsOn": ["Frontend: lint", "Frontend: build"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Frontend: lint",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "lint"],
+      "options": {
+        "cwd": "${workspaceFolder}/web_ui"
+      },
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "Frontend: build",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}/web_ui"
+      },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Rust: check workspace",
+      "type": "process",
+      "command": "cargo",
+      "args": ["check", "--workspace", "--all-targets"],
+      "dependsOn": "Frontend: build",
+      "dependsOrder": "sequence",
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Rust: test workspace",
+      "type": "process",
+      "command": "cargo",
+      "args": ["test", "--workspace"],
+      "dependsOn": "Frontend: build",
+      "dependsOrder": "sequence",
+      "problemMatcher": ["$rustc"],
+      "group": "test"
+    },
+    {
+      "label": "Windows: build x64 release",
+      "type": "process",
+      "command": "cargo",
+      "args": [
+        "xwin",
+        "build",
+        "--release",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "-p",
+        "textractor_bridge_server",
+        "-p",
+        "textractor_bridge_dll"
+      ],
+      "dependsOn": "Frontend: build",
+      "dependsOrder": "sequence",
+      "problemMatcher": ["$rustc"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Windows: build x86 release",
+      "type": "process",
+      "command": "cargo",
+      "args": [
+        "xwin",
+        "build",
+        "--release",
+        "--target",
+        "i686-pc-windows-msvc",
+        "-p",
+        "textractor_bridge_server",
+        "-p",
+        "textractor_bridge_dll"
+      ],
+      "dependsOn": "Frontend: build",
+      "dependsOrder": "sequence",
+      "problemMatcher": ["$rustc"],
+      "group": "build"
+    }
+  ]
+}
