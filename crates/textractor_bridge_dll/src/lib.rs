@@ -6,7 +6,7 @@ use sentence_info::{parse_sentence_info, ParsedSentenceInfo};
 use std::io::Write;
 use std::{
     fs::{File, OpenOptions},
-    panic::{catch_unwind, AssertUnwindSafe},
+    panic::catch_unwind,
     sync::atomic::{AtomicI64, AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -25,9 +25,9 @@ pub extern "C" fn OnNewSentence(
     sentence: *const u16,
     sentence_info: *const InfoForExtension,
 ) -> *const u16 {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
+    let _ = catch_unwind(|| {
         handle_new_sentence(sentence, sentence_info);
-    }));
+    });
     sentence
 }
 
