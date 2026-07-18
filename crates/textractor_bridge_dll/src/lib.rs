@@ -2,9 +2,10 @@
 
 use bridge_protocol::{default_pipe_name, write_frame, PipeLineEvent, PipeLineMeta};
 use sentence_info::{parse_sentence_info, ParsedSentenceInfo};
+#[cfg(windows)]
+use std::io::Write;
 use std::{
     fs::{File, OpenOptions},
-    io::Write,
     panic::{catch_unwind, AssertUnwindSafe},
     sync::atomic::{AtomicI64, AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
